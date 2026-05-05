@@ -1,0 +1,38 @@
+# =========================================================================
+# 🚀 ECONOMIA DE TOKENS: ARQUIVO DE IGNORAÇÃO DO CLAUDE
+# Mantenha este arquivo na raiz do projeto APPCONTAGEM.
+# Impede a IA de ler arquivos inúteis, economizando tokens.
+# =========================================================================
+
+# Dependências (Se houver)
+node_modules
+*.lock
+package-lock.json
+
+# Ícones e Imagens PWA
+icons/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.ico
+*.gif
+
+# Arquivos de Teste isolados não relevantes ao núcleo
+test_buttons.py
+gerar-icones.html
+
+# Assets Estáticos e Configurações Fechadas (Que a IA não deve alterar)
+manifest.json
+
+# Metadados de Git e IDE
+.vscode/
+.idea/
+.git/
+
+# Backups, Temporários e Sistema
+backup/
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db

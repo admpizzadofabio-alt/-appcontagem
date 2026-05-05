@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk curl *)",
+      "Bash(rtk grep *)",
+      "Bash(rtk netstat *)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \"333\")",
+      "Bash(findstr \":3333\")",
+      "Bash(rtk tasklist *)",
+      "PowerShell(Get-Process -Id 60288)",
+      "PowerShell(Get-Process | Where-Object { $_.Id -eq 60288 } | Format-List Id, ProcessName, StartTime; Get-NetTCPConnection -LocalPort 3333 -State Listen | Select-Object OwningProcess, LocalAddress)",
+      "Bash(npx tsx *)"
+    ]
+  }
+}

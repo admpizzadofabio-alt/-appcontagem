@@ -1,0 +1,49 @@
+# ── Dependências ───────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build ───────────────────────────────────────────────
+dist/
+build/
+.expo/
+*.tsbuildinfo
+
+# ── Ambiente ────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.local.example
+
+# ── Banco de dados ──────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+
+# ── Uploads ─────────────────────────────────────────────
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ── Logs ────────────────────────────────────────────────
+*.log
+logs/
+pino.log
+
+# ── Testes / Cobertura ──────────────────────────────────
+coverage/
+
+# ── OS ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+
+# ── Docker (dados locais, não config) ───────────────────
+docker/data/

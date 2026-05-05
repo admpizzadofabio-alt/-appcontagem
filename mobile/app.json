@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "PF Bebidas",
+    "slug": "appcontagem",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a4731"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a4731"
+      },
+      "package": "com.pizzadofabio.bebidas",
+      "usesCleartextTraffic": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.pizzadofabio.bebidas",
+      "supportsTablet": false
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-secure-store",
+      "expo-local-authentication"
+    ]
+  }
+}

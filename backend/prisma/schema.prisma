@@ -1,0 +1,341 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NivelAcesso {
+  Operador
+  Supervisor
+  Admin
+}
+
+enum TipoMovimentacao {
+  Entrada
+  Saida
+  Transferencia
+  AjustePerda
+  AjusteContagem
+  CargaInicial
+}
+
+enum StatusAprovacao {
+  Pendente
+  Aprovado
+  Rejeitado
+}
+
+enum StatusContagem {
+  Aberta
+  Fechada
+  Cancelada
+}
+
+enum StatusPedido {
+  Pendente
+  EmAnalise
+  Atendido
+  Cancelado
+}
+
+enum PinFormat {
+  plaintext
+  sha256
+  bcrypt
+}
+
+model Usuario {
+  id          String      @id @default(uuid())
+  nome        String
+  pin         String
+  pinFormat      PinFormat   @default(bcrypt)
+  setor          String
+  nivelAcesso    NivelAcesso @default(Operador)
+  ativo          Boolean     @default(true)
+  loginAttempts  Int         @default(0)
+  bloqueadoAte   DateTime?
+  criadoEm       DateTime    @default(now())
+
+  movimentacoes    MovimentacaoEstoque[]
+  contagens        ContagemEstoque[]
+  pedidos          PedidoCompra[]
+  logs             LogAuditoria[]
+  refreshTokens    RefreshToken[]
+  aprovacoes       AprovacaoMovimentacao[] @relation("AprovadoPor")
+  solicitacoes     AprovacaoMovimentacao[] @relation("SolicitadoPor")
+  correcoesVenda   CorrecaoVenda[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  usuarioId String
+  expiresAt DateTime
+  criadoEm  DateTime @default(now())
+
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Produto {
+  id            String   @id @default(uuid())
+  nomeBebida    String
+  categoria     String
+  unidadeMedida String
+  volumePadrao  String?
+  custoUnitario Float    @default(0)
+  estoqueMinimo Float    @default(0)
+  perdaThreshold Float   @default(5)
+  setorPadrao   String   @default("Todos")
+  revisadoAdmin Boolean  @default(true)
+  ativo         Boolean  @default(true)
+  imagem        String?
+  criadoEm      DateTime @default(now())
+  ultimaContagemEm DateTime?
+
+  estoque          EstoqueAtual[]
+  movimentacoes    MovimentacaoEstoque[]
+  itensContagem    ItemContagem[]
+  pedidos          PedidoCompra[]
+  colibriProdutos  ColibriProduto[]
+  correcoesComandado CorrecaoVenda[] @relation("CorrecaoProdutoComandado")
+  correcoesServido   CorrecaoVenda[] @relation("CorrecaoProdutoServido")
+}
+
+model EstoqueAtual {
+  id              String   @id @default(uuid())
+  produtoId       String
+  local           String
+  quantidadeAtual Float    @default(0)
+  atualizadoEm   DateTime @updatedAt
+  atualizadoPor  String?
+
+  produto         Produto  @relation(fields: [produtoId], references: [id])
+
+  @@unique([produtoId, local])
+}
+
+model MovimentacaoEstoque {
+  id                String           @id @default(uuid())
+  dataMov           DateTime         @default(now())
+  produtoId         String
+  tipoMov           TipoMovimentacao
+  quantidade        Float
+  localOrigem       String?
+  localDestino      String?
+  usuarioId         String
+  observacao        String?
+  motivoAjuste      String?
+  imagemComprovante String?
+  referenciaOrigem  String?
+  aprovacaoStatus   StatusAprovacao  @default(Aprovado)
+  diaOperacional    String?
+  turnoId           String?
+  idGrupoCorrecao   String?
+  origemRascunho    String?
+
+  produto    Produto  @relation(fields: [produtoId], references: [id])
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  aprovacao  AprovacaoMovimentacao?
+
+  @@index([diaOperacional])
+  @@index([turnoId])
+  @@index([produtoId, tipoMov, dataMov])
+}
+
+model AprovacaoMovimentacao {
+  id              String          @id @default(uuid())
+  movimentacaoId  String          @unique
+  solicitanteId   String
+  aprovadorId     String?
+  status          StatusAprovacao @default(Pendente)
+  motivo          String?
+  criadoEm       DateTime        @default(now())
+  resolvidoEm    DateTime?
+
+  movimentacao   MovimentacaoEstoque @relation(fields: [movimentacaoId], references: [id], onDelete: Cascade)
+  solicitante    Usuario             @relation("SolicitadoPor", fields: [solicitanteId], references: [id])
+  aprovador      Usuario?            @relation("AprovadoPor", fields: [aprovadorId], references: [id])
+}
+
+model ContagemEstoque {
+  id             String         @id @default(uuid())
+  dataContagem   DateTime       @default(now())
+  local          String
+  responsavelId  String?
+  operadorId     String
+  status         StatusContagem @default(Aberta)
+  modoCego       Boolean        @default(true)
+  threshold      Int            @default(2)
+  dataAbertura   DateTime       @default(now())
+  dataFechamento DateTime?
+  totalItens     Int            @default(0)
+  totalDesvios   Int            @default(0)
+  diaOperacional String?
+  turnoId        String?        @unique
+  tipoContagem   String         @default("AberturaTurno")
+
+  operador       Usuario        @relation(fields: [operadorId], references: [id])
+  itens          ItemContagem[]
+  rascunhos      EntradaRascunho[]
+
+  @@index([diaOperacional])
+}
+
+model ItemContagem {
+  id                String  @id @default(uuid())
+  contagemId        String
+  produtoId         String
+  quantidadeSistema Float
+  quantidadeContada Float   @default(0)
+  diferenca         Float   @default(0)
+  causaDivergencia  String?
+  contadoPor        String?
+  divergenciaCategoria String? // "ok" | "leve" | "grande"
+  fotoEvidencia     String?
+  justificativa     String?
+  ajusteAprovado    Boolean @default(false)
+  ajusteAprovadoPor String?
+  ajusteDecidoEm    DateTime?
+
+  contagem  ContagemEstoque @relation(fields: [contagemId], references: [id], onDelete: Cascade)
+  produto   Produto         @relation(fields: [produtoId], references: [id])
+}
+
+model PedidoCompra {
+  id               String       @id @default(uuid())
+  idGrupo          String
+  dataPedido       DateTime     @default(now())
+  produtoId        String?
+  nomeProduto      String
+  quantidade       Float
+  setorSolicitante String
+  usuarioId        String
+  observacao       String?
+  urgente          Boolean      @default(false)
+  status           StatusPedido @default(Pendente)
+
+  produto  Produto? @relation(fields: [produtoId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+}
+
+model LogAuditoria {
+  id           String   @id @default(uuid())
+  dataEvento   DateTime @default(now())
+  usuarioId    String?
+  usuarioNome  String
+  setor        String
+  acao         String
+  entidade     String
+  idReferencia String?
+  detalhes     String?
+
+  usuario  Usuario? @relation(fields: [usuarioId], references: [id])
+}
+
+model ColibriProduto {
+  id          String   @id @default(uuid())
+  colibriCode String   @unique
+  colibriNome String
+  produtoId   String
+  fatorConv   Float    @default(1)
+  ativo       Boolean  @default(true)
+  criadoEm    DateTime @default(now())
+
+  produto     Produto  @relation(fields: [produtoId], references: [id])
+}
+
+model FechamentoTurno {
+  id                  String    @id @default(uuid())
+  diaOperacional      String
+  local               String    // "Bar" | "Delivery"
+  abertoEm            DateTime
+  abertoPor           String
+  fechadoEm           DateTime?
+  fechadoAutomatico   Boolean   @default(false)
+  fechadoSemContagem  Boolean   @default(false)
+  contagemId          String?
+  importacaoColibriId String?
+  status              String    @default("Aberto") // "Aberto" | "Fechado"
+  totalDivergencias   Int       @default(0)
+  divergenciasGrandes Int       @default(0)
+  valorDivergencias   Float     @default(0)
+  gapNaoExplicado     Float     @default(0)
+  observacoes         String?
+
+  @@index([diaOperacional, local])
+  @@index([status])
+  @@index([local])
+}
+
+model EntradaRascunho {
+  id              String    @id @default(uuid())
+  contagemId      String
+  produtoId       String
+  quantidade      Float
+  origemTexto     String    // texto livre
+  observacao      String?
+  fotoEvidencia   String    // OBRIGATÓRIA
+  operadorId      String
+  local           String
+  status          String    @default("Pendente") // "Pendente" | "AprovadoComoEntrada" | "VinculadoExistente" | "Rejeitado"
+  movimentacaoId  String?
+  vinculadoA      String?
+  decididoPor     String?
+  decididoEm      DateTime?
+  motivoDecisao   String?
+  criadoEm        DateTime  @default(now())
+
+  contagem  ContagemEstoque @relation(fields: [contagemId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([produtoId])
+}
+
+model CorrecaoVenda {
+  id                  String   @id @default(uuid())
+  diaOperacional      String
+  turnoId             String?
+  local               String
+  operadorId          String
+  produtoComandadoId  String
+  produtoServidoId    String
+  quantidade          Float
+  fotoComanda         String   // OBRIGATÓRIA — prova de comanda errada
+  observacao          String?
+  movimentacaoId      String?  // Saida criada para produtoServido
+  criadoEm            DateTime @default(now())
+
+  operador          Usuario @relation(fields: [operadorId], references: [id])
+  produtoComandado  Produto @relation("CorrecaoProdutoComandado", fields: [produtoComandadoId], references: [id])
+  produtoServido    Produto @relation("CorrecaoProdutoServido", fields: [produtoServidoId], references: [id])
+
+  @@index([diaOperacional])
+  @@index([turnoId])
+  @@index([operadorId])
+}
+
+model ColibriCatalogo {
+  id          String   @id @default(uuid())
+  colibriCode String   @unique
+  colibriNome String
+  grupo       String
+  ativo       Boolean  @default(true)
+  sincronizadoEm DateTime @default(now())
+}
+
+model ColibriImportacao {
+  id              String   @id @default(uuid())
+  dataInicio      DateTime
+  dataFim         DateTime
+  importadoEm     DateTime @default(now())
+  usuarioId       String?
+  usuarioNome     String
+  totalVendas     Int
+  totalImportados Int
+  totalIgnorados  Int
+  status          String   @default("ok")
+  erros           String?
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head><title>Gerar Ícones PWA</title></head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// Gera ícones do PWA em vários tamanhos e faz download automático
+const sizes = [72, 96, 128, 192, 512];
+
+function generateIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // Fundo verde escuro
+  ctx.fillStyle = '#1a4731';
+  roundRect(ctx, 0, 0, size, size, size * 0.18);
+  ctx.fill();
+
+  // Arco da pizza (branco)
+  const cx = size / 2;
+  const cy = size * 0.42;
+  const r  = size * 0.28;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.lineWidth = size * 0.055;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+
+  // Bolinhas no arco (tijolos)
+  const dotCount = 7;
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < dotCount; i++) {
+    const angle = Math.PI + (Math.PI / (dotCount - 1)) * i;
+    const dx = cx + (r + size * 0.032) * Math.cos(angle);
+    const dy = cy + (r + size * 0.032) * Math.sin(angle);
+    ctx.beginPath();
+    ctx.arc(dx, dy, size * 0.028, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Chama (vermelha)
+  ctx.fillStyle = '#d32f2f';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 0.7);
+  ctx.bezierCurveTo(cx + r*0.2, cy - r*0.2, cx + r*0.15, cy + r*0.05, cx, cy + r*0.15);
+  ctx.bezierCurveTo(cx - r*0.15, cy + r*0.05, cx - r*0.2, cy - r*0.2, cx, cy - r*0.7);
+  ctx.fill();
+
+  // Linha vermelha (traço da marca)
+  ctx.fillStyle = '#d32f2f';
+  ctx.fillRect(cx - r * 0.7, cy + r * 0.3, r * 1.4, size * 0.035);
+
+  // Texto "PF"
+  const fontSize = size * 0.16;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${fontSize}px Inter, Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('PF', cx, cy + r * 0.72);
+
+  return canvas;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// Exibe e faz download de cada ícone
+const container = document.createElement('div');
+document.body.appendChild(container);
+container.innerHTML = '<h2 style="font-family:sans-serif">Clique em cada link para salvar os ícones na pasta icons/</h2>';
+
+sizes.forEach(size => {
+  const canvas = generateIcon(size);
+  canvas.style.margin = '8px';
+  container.appendChild(canvas);
+
+  const link = document.createElement('a');
+  link.href = canvas.toDataURL('image/png');
+  link.download = `icon-${size}.png`;
+  link.textContent = ` Baixar icon-${size}.png `;
+  link.style.display = 'block';
+  link.style.fontFamily = 'sans-serif';
+  link.style.margin = '4px 0 16px 0';
+  container.appendChild(link);
+});
+</script>
+</body>
+</html>

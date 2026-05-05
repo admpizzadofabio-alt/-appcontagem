@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk grep *)",
+      "Bash(rtk cat *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(rtk npx *)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(del \"c:\\\\Users\\\\CLIENTE\\\\Documents\\\\APPCONTAGEM\\\\mobile\\\\src\\\\screens\\\\Contagem\\\\ContagemAtivaScreen.tsx\")",
+      "Bash(del \"c:\\\\Users\\\\CLIENTE\\\\Documents\\\\APPCONTAGEM\\\\mobile\\\\src\\\\screens\\\\Contagem\\\\ContagemScreen.tsx\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\CLIENTE\\.claude\\projects\\c--Users-CLIENTE-Documents-APPCONTAGEM\\memory"
+    ]
+  }
+}
