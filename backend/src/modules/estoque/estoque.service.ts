@@ -7,11 +7,11 @@ export async function listar(local?: string) {
         ativo: true,
         OR: [{ setorPadrao: local }, { setorPadrao: 'Todos' }],
       },
-      include: { estoqueAtual: { where: { local } } },
+      include: { estoque: { where: { local } } },
       orderBy: { nomeBebida: 'asc' },
     })
     return produtos.map((p) => {
-      const { estoqueAtual: estoqueList, ...produtoData } = p
+      const { estoque: estoqueList, ...produtoData } = p
       const estoque = estoqueList[0]
       return {
         id: estoque?.id ?? `virtual_${p.id}`,
