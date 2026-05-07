@@ -81,14 +81,29 @@ export function ContagemTurnoScreen() {
   async function handleFinalizar() {
     const naoContados = itens.filter((i) => quantidades[i.produtoId] === undefined && !i.contadoPor)
     if (naoContados.length > 0) {
+      const lista = naoContados.map((i) => `• ${i.produto.nomeBebida}`).join('\n')
       Alert.alert(
-        'Contagem incompleta',
-        `${naoContados.length} produto(s) ainda não foram contados.\n\nDigite ao menos 0 para cada produto antes de finalizar.`,
-        [{ text: 'OK', style: 'cancel' }],
+        'Produtos não contados',
+        `${naoContados.length} produto(s) não foram contados:\n\n${lista}\n\nDeseja finalizar mesmo assim? Eles serão salvos como zero.`,
+        [
+          { text: 'Voltar e contar', style: 'cancel' },
+          { text: 'Finalizar mesmo assim', style: 'destructive', onPress: confirmarFinalizacao },
+        ]
       )
-      return
+    } else {
+      confirmarFinalizacao()
     }
-    finalizarDeFato()
+  }
+
+  function confirmarFinalizacao() {
+    Alert.alert(
+      'Confirmar finalização',
+      'Tem certeza que deseja finalizar a contagem? Esta ação não pode ser desfeita.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Confirmar', onPress: finalizarDeFato },
+      ]
+    )
   }
 
   async function finalizarDeFato() {
@@ -98,6 +113,11 @@ export function ContagemTurnoScreen() {
         if (!isNaN(qtd)) {
           await registrar({ contagemId, produtoId, quantidadeContada: qtd }).unwrap()
         }
+      }
+      // Salva itens não contados como zero
+      const naoContados = itens.filter((i) => quantidades[i.produtoId] === undefined && !i.contadoPor)
+      for (const item of naoContados) {
+        await registrar({ contagemId, produtoId: item.produtoId, quantidadeContada: 0 }).unwrap()
       }
       await refetch()
       navigation.replace('ResumoContagem', { contagemId })
@@ -132,7 +152,7 @@ export function ContagemTurnoScreen() {
     const bgCor    = BG_CORES[item.produto.categoria] ?? '#F5F5F5'
 
     return (
-      <View style={s.row}>
+      <View style={[s.row, !contado && s.rowNaoContado]}>
         {/* Reorder + ícone */}
         <View style={s.rowLeft}>
           <TouchableOpacity
@@ -234,17 +254,13 @@ export function ContagemTurnoScreen() {
         ItemSeparatorComponent={() => <View style={s.separator} />}
         ListFooterComponent={
           <TouchableOpacity
-            style={[s.finalizarBtn, (!podeFinalizar || salvando) && s.finalizarBtnBloqueado]}
+            style={[s.finalizarBtn, salvando && s.finalizarBtnBloqueado]}
             onPress={handleFinalizar}
             disabled={salvando}
             activeOpacity={0.85}
           >
             <Text style={s.finalizarTxt}>
-              {salvando
-                ? 'Processando...'
-                : podeFinalizar
-                  ? 'Finalizar Contagem'
-                  : `${pendentes} produto${pendentes !== 1 ? 's' : ''} sem contar`}
+              {salvando ? 'Processando...' : 'Finalizar Contagem'}
             </Text>
           </TouchableOpacity>
         }
@@ -303,6 +319,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: '#fff',
     gap: 12,
+  },
+  rowNaoContado: {
+    backgroundColor: '#FFF3CD',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFC107',
   },
 
   // Lado esquerdo: mover + ícone

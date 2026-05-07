@@ -25,6 +25,6 @@ export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: axiosBaseQuery,
   keepUnusedDataFor: 60,
-  tagTypes: ['Estoque', 'Movimentacoes', 'Contagem', 'Pedidos', 'Produtos', 'Usuarios', 'Relatorios', 'ColibriMapeamentos', 'ColibriCatalogo', 'Turno', 'Rascunhos', 'Correcoes'],
+  tagTypes: ['Estoque', 'Movimentacoes', 'Contagem', 'Pedidos', 'Produtos', 'Usuarios', 'Relatorios', 'ColibriMapeamentos', 'ColibriCatalogo', 'ColibriUltimaImportacao', 'Turno', 'Rascunhos', 'Correcoes'],
   endpoints: () => ({}),
 })

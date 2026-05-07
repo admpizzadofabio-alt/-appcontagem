@@ -3,6 +3,8 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useListarEstoqueQuery } from '../../services/api/estoque'
 import { useLocalAcesso } from '../../hooks/useLocalAcesso'
+import { useTurnoAtualQuery } from '../../services/api/turnos'
+import { useAuth } from '../../contexts/AuthContext'
 import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
@@ -10,7 +12,17 @@ import { SectionHeader } from '../../components/SectionHeader'
 import { colors } from '../../theme/colors'
 
 export function EstoqueScreen() {
+  const { usuario } = useAuth()
   const { veTodosLocais, localOperador } = useLocalAcesso()
+  const isAdmin = usuario?.nivelAcesso === 'Admin'
+  const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
+  const { data: turnoAtual } = useTurnoAtualQuery(
+    { local: localOperador! },
+    { skip: isSup || !localOperador }
+  )
+  const contagemFinalizada = turnoAtual?.contagem?.status === 'Fechada'
+  const qtdBloqueada = !isSup && !contagemFinalizada
+
   const [local, setLocal] = useState<'Bar' | 'Delivery' | undefined>(veTodosLocais ? undefined : localOperador)
   const [busca, setBusca] = useState('')
   const efetivo = veTodosLocais ? local : localOperador
@@ -43,7 +55,13 @@ export function EstoqueScreen() {
           </View>
         )}
 
-        {baixo.length > 0 && (
+        {qtdBloqueada && (
+          <View style={s.lockBanner}>
+            <Text style={s.lockBannerTxt}>🔒 Finalize a contagem do turno para ver as quantidades</Text>
+          </View>
+        )}
+
+        {!qtdBloqueada && baixo.length > 0 && (
           <>
             <SectionHeader title={`⚠️ Abaixo do mínimo (${baixo.length})`} />
             {baixo.map((e) => (
@@ -77,8 +95,10 @@ export function EstoqueScreen() {
                   <Text style={s.itemSub}>{e.produto.categoria} · {e.local}</Text>
                 </View>
                 <View style={s.itemRight}>
-                  <Text style={[s.itemQty, alerta && { color: colors.danger }]}>{e.quantidadeAtual}</Text>
-                  <Text style={s.itemUnit}>{e.produto.unidadeMedida}</Text>
+                  <Text style={[s.itemQty, alerta && !qtdBloqueada && { color: colors.danger }]}>
+                    {qtdBloqueada ? '🔒' : e.quantidadeAtual}
+                  </Text>
+                  {!qtdBloqueada && <Text style={s.itemUnit}>{e.produto.unidadeMedida}</Text>}
                 </View>
               </View>
             </Card>

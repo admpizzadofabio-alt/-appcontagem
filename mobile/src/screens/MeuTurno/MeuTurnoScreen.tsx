@@ -5,12 +5,15 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useGetMeuTurnoQuery, type MovResumo, type ItemContagemResumo } from '../../services/api/meuTurno'
+import { useHistoricoTurnosQuery } from '../../services/api/turnos'
+import { useLocalAcesso } from '../../hooks/useLocalAcesso'
 import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
+import { BotaoColibriCarregar } from '../../components/BotaoColibriCarregar'
 import { colors } from '../../theme/colors'
 
-type Aba = 'contagem' | 'movimentos' | 'erros'
+type Aba = 'contagem' | 'movimentos' | 'erros' | 'historico'
 
 function fmtHora(iso: string) {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -22,6 +25,10 @@ function fmtData(iso: string) {
 
 export function MeuTurnoScreen() {
   const { data, isLoading, refetch, isFetching } = useGetMeuTurnoQuery()
+  const { localOperador, veTodosLocais } = useLocalAcesso()
+  const { data: historico = [] } = useHistoricoTurnosQuery(
+    localOperador ? { local: localOperador } : undefined
+  )
   const [aba, setAba] = useState<Aba>('contagem')
 
   if (isLoading) {
@@ -32,9 +39,12 @@ export function MeuTurnoScreen() {
     )
   }
 
-  if (!data) return <EmptyState icon="📭" title="Sem turno aberto hoje" subtitle="Abra o turno para iniciar as operações" />
-
-  const { contagem, movimentacoes, errosComanda, totais, diaOperacional, setor } = data
+  const contagem      = data?.contagem ?? null
+  const movimentacoes = data?.movimentacoes ?? { entradas: [], perdas: [], transferencias: [] }
+  const errosComanda  = data?.errosComanda ?? []
+  const totais        = data?.totais ?? { entradas: 0, perdas: 0, transferencias: 0, errosComanda: 0 }
+  const diaOperacional = data?.diaOperacional ?? ''
+  const setor         = data?.setor ?? localOperador ?? ''
 
   // ── Contagem: separar por categoria ──
   const contagemOk     = contagem?.itens.filter((i) => i.divergenciaCategoria === 'ok'    || i.diferenca === 0) ?? []
@@ -48,7 +58,7 @@ export function MeuTurnoScreen() {
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>Meu Turno</Text>
-          <Text style={s.headerSub}>{setor} · {fmtData(diaOperacional + 'T12:00:00')}</Text>
+          <Text style={s.headerSub}>{setor}{diaOperacional ? ` · ${fmtData(diaOperacional + 'T12:00:00')}` : ''}</Text>
         </View>
         <TouchableOpacity onPress={refetch} style={s.refreshBtn} disabled={isFetching}>
           <Text style={s.refreshTxt}>{isFetching ? '⏳' : '🔄'}</Text>
@@ -81,6 +91,7 @@ export function MeuTurnoScreen() {
           { key: 'contagem', label: `📋 Contagem${contagem ? ` (${contagem.totalDesvios} desvios)` : ''}` },
           { key: 'movimentos', label: `📦 Movimentos (${totais.entradas + totais.perdas + totais.transferencias})` },
           { key: 'erros', label: `📋 Err. Comanda (${totais.errosComanda})` },
+          { key: 'historico', label: `📅 Histórico (${historico.length})` },
         ] as { key: Aba; label: string }[]).map((t) => (
           <TouchableOpacity
             key={t.key}
@@ -95,6 +106,9 @@ export function MeuTurnoScreen() {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
+
+        {/* Carregar Vendas Colibri — sempre disponível pra operador atualizar */}
+        <BotaoColibriCarregar />
 
         {/* ══ ABA: CONTAGEM ══════════════════════════════════════ */}
         {aba === 'contagem' && (
@@ -193,6 +207,35 @@ export function MeuTurnoScreen() {
                 {movimentacoes.transferencias.map((m) => <MovCard key={m.id} mov={m} cor={colors.info} />)}
               </>
             )}
+          </>
+        )}
+
+        {/* ══ ABA: HISTÓRICO ═════════════════════════════════════ */}
+        {aba === 'historico' && (
+          <>
+            {historico.length === 0 && (
+              <EmptyState icon="📅" title="Nenhum turno encontrado" />
+            )}
+            {historico.map((t) => (
+              <Card key={t.id} style={s.historicoCard}>
+                <View style={s.historicoRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.historicoData}>{fmtData(t.diaOperacional + 'T12:00:00')}</Text>
+                    <Text style={s.historicoSub}>{t.local} · Aberto às {fmtHora(t.abertoEm)}</Text>
+                    {t.fechadoEm && <Text style={s.historicoSub}>Fechado às {fmtHora(t.fechadoEm)}</Text>}
+                  </View>
+                  <View style={s.historicoRight}>
+                    <Badge
+                      label={t.status}
+                      variant={t.status === 'Aberto' ? 'warning' : 'success'}
+                    />
+                    {t.divergenciasGrandes > 0 && (
+                      <Text style={s.historicoDiverg}>🔴 {t.divergenciasGrandes} grande(s)</Text>
+                    )}
+                  </View>
+                </View>
+              </Card>
+            ))}
           </>
         )}
 
@@ -334,6 +377,14 @@ const s = StyleSheet.create({
   movRight: { alignItems: 'flex-end', gap: 4 },
   movQtd:   { fontSize: 15, fontWeight: '800' },
   movHora:  { fontSize: 11, color: colors.textSub },
+
+  // Histórico
+  historicoCard:   { padding: 12, marginBottom: 2 },
+  historicoRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  historicoData:   { fontSize: 14, fontWeight: '700', color: colors.text },
+  historicoSub:    { fontSize: 12, color: colors.textSub, marginTop: 2 },
+  historicoRight:  { alignItems: 'flex-end', gap: 4 },
+  historicoDiverg: { fontSize: 11, color: colors.danger, fontWeight: '600' },
 
   // Erros de comanda
   erroCard:  { padding: 12, gap: 4 },

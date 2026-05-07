@@ -86,8 +86,56 @@ async function getToken(): Promise<string> {
   if (!json.access_token) throw new Error('Token não encontrado na resposta do Colibri')
 
   cachedToken = String(json.access_token)
-  tokenExpiry = Date.now() + 13 * 60 * 1000 // token expira em 15 min, renova aos 13
+  // Token Colibri expira em 5min (doc oficial). Renovamos aos 4min para margem.
+  tokenExpiry = Date.now() + 4 * 60 * 1000
   return cachedToken
+}
+
+export type StatusPeriodoResult = {
+  pronto: boolean
+  pendentes: number
+  detalhes: any[]
+}
+
+// Checa se todos os dados do período já subiram pro Colibri Cloud antes de importar.
+// Endpoint /api/v1/status-periodo retorna lista — se vier itens com status pendente,
+// significa que ainda há dia em processamento.
+export async function verificarStatusPeriodo(
+  dataInicio: string,
+  dataFim: string,
+): Promise<StatusPeriodoResult> {
+  if (!env.COLIBRI_CLIENT_ID || !env.COLIBRI_STORE_ID) {
+    throw new Error('Integração Colibri não configurada')
+  }
+
+  const token = await getToken()
+  const params = new URLSearchParams({
+    lojas: env.COLIBRI_STORE_ID,
+    dtinicio: dataInicio,
+    dtfim: dataFim,
+    pagina: '1',
+  })
+
+  const res = await fetch(`${env.COLIBRI_BASE_URL}/api/v1/status-periodo?${params}`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Colibri status-periodo falhou (${res.status}): ${text}`)
+  }
+
+  const json = (await res.json()) as { data?: any[] }
+  const lista = json.data ?? []
+
+  // Conservador: qualquer item com flag explícita de pendência conta como pendente.
+  // Se a Colibri retornar lista vazia, assumimos que não há dado a sincronizar (pronto).
+  const pendentes = lista.filter((it: any) => {
+    const status = String(it?.status ?? it?.situacao ?? '').toLowerCase()
+    return status.includes('pendente') || status.includes('processando') || it?.processado === false
+  })
+
+  return { pronto: pendentes.length === 0, pendentes: pendentes.length, detalhes: lista }
 }
 
 async function fetchAllItems(dtinicio: string, dtfim: string): Promise<ColibriSaleItem[]> {

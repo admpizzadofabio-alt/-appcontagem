@@ -35,7 +35,22 @@ export type ImportarVendasResult = {
   totalIgnorados: number
   erros: string[]
   aviso?: string
+  status?: 'ok' | 'parcial' | 'aguardando' | 'em_andamento' | 'sem_periodo'
+  dataInicio?: string
+  dataFim?: string
 }
+
+export type UltimaImportacao = {
+  id: string
+  dataInicio: string
+  dataFim: string
+  importadoEm: string
+  usuarioNome: string
+  totalVendas: number
+  totalImportados: number
+  totalIgnorados: number
+  status: string
+} | null
 
 export type ColibriStatus = {
   ok: boolean
@@ -112,6 +127,14 @@ export const colibriApi = baseApi.injectEndpoints({
       query: () => ({ url: '/colibri/produtos', method: 'POST' }),
       invalidatesTags: ['Produtos', 'ColibriMapeamentos'],
     }),
+    importarPendente: build.mutation<ImportarVendasResult, void>({
+      query: () => ({ url: '/colibri/importar-pendente', method: 'POST' }),
+      invalidatesTags: ['Estoque', 'Movimentacoes', 'ColibriUltimaImportacao'],
+    }),
+    ultimaImportacao: build.query<UltimaImportacao, void>({
+      query: () => ({ url: '/colibri/ultima-importacao' }),
+      providesTags: ['ColibriUltimaImportacao'],
+    }),
   }),
   overrideExisting: false,
 })
@@ -128,4 +151,6 @@ export const {
   useSincronizarCatalogoMutation,
   useRemoverCatalogoItemMutation,
   useImportarProdutosColibriMutation,
+  useImportarPendenteMutation,
+  useUltimaImportacaoQuery,
 } = colibriApi

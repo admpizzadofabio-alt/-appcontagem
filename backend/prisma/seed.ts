@@ -10,9 +10,11 @@ async function main() {
   const hash1111 = await bcrypt.hash('1111', 12)
   const hash2222 = await bcrypt.hash('2222', 12)
 
+  // upsert.update vazio: se o usuário já existir, NÃO sobrescreve o PIN.
+  // O PIN só é setado na criação inicial. Re-rodar o seed é seguro pra PINs alterados.
   await prisma.usuario.upsert({
     where: { id: 'admin-master' },
-    update: { pin: hash1234, pinFormat: 'bcrypt' },
+    update: {},
     create: {
       id: 'admin-master',
       nome: 'Admin Master',
@@ -26,7 +28,7 @@ async function main() {
 
   await prisma.usuario.upsert({
     where: { id: 'operador-bar' },
-    update: { pin: hash1111, pinFormat: 'bcrypt' },
+    update: {},
     create: {
       id: 'operador-bar',
       nome: 'Operador Bar',
@@ -40,7 +42,7 @@ async function main() {
 
   await prisma.usuario.upsert({
     where: { id: 'operador-delivery' },
-    update: { pin: hash2222, pinFormat: 'bcrypt' },
+    update: {},
     create: {
       id: 'operador-delivery',
       nome: 'Operador Delivery',

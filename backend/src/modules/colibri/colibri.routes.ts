@@ -12,11 +12,19 @@ import {
   getCatalogo,
   deleteCatalogoItem,
   postImportarProdutos,
+  postImportarPendente,
+  getUltimaImportacaoCtrl,
 } from './colibri.controller.js'
 
 export const colibriRouter = Router()
 
 colibriRouter.use(requireAuth)
+
+// ── Acessíveis a qualquer operador autenticado ──
+colibriRouter.post('/importar-pendente', postImportarPendente)
+colibriRouter.get('/ultima-importacao', getUltimaImportacaoCtrl)
+
+// ── A partir daqui, apenas Admin ──
 colibriRouter.use(requireNivel(['Admin']))
 
 colibriRouter.get('/status', getStatus)

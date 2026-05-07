@@ -1,11 +1,8 @@
 import { prisma } from '../../config/prisma.js'
-
-function diaAtual() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { getDiaOperacional } from '../../shared/diaOperacional.js'
 
 export async function getMeuTurno(usuarioId: string, setor: string) {
-  const hoje = diaAtual()
+  const hoje = getDiaOperacional()
 
   // Setor 'Admin' / 'Todos' não tem turno próprio — usa Bar como fallback
   const local = (setor === 'Admin' || setor === 'Todos') ? 'Bar' : setor

@@ -5,6 +5,8 @@ import {
   atualizarMapeamento,
   removerMapeamento,
   importarVendas,
+  importarPendente,
+  getUltimaImportacao,
   listarImportacoes,
   sincronizarCatalogo,
   listarCatalogo,
@@ -92,5 +94,26 @@ export async function postImportarProdutos(_req: Request, res: Response, next: N
   try {
     const resultado = await importarProdutosDoColibri()
     res.status(201).json(resultado)
+  } catch (e) { next(e) }
+}
+
+// ── Endpoints acessíveis a qualquer operador autenticado ──────────────────────
+
+export async function postImportarPendente(req: Request, res: Response, next: NextFunction) {
+  try {
+    const usuario = req.user!
+    const local = usuario.setor === 'Delivery' ? 'Delivery' : 'Bar'
+    const resultado = await importarPendente({
+      local,
+      usuarioId: usuario.sub,
+      usuarioNome: usuario.nome,
+    })
+    res.json(resultado)
+  } catch (e) { next(e) }
+}
+
+export async function getUltimaImportacaoCtrl(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await getUltimaImportacao())
   } catch (e) { next(e) }
 }

@@ -4,10 +4,15 @@
 # Impede a IA de ler arquivos inúteis, economizando tokens.
 # =========================================================================
 
-# Dependências (Se houver)
+# Dependências e Builds (Padrão FET)
 node_modules
+**/node_modules/
 *.lock
 package-lock.json
+**/dist/
+**/build/
+**/.expo/
+**/.prisma/
 
 # Ícones e Imagens PWA
 icons/

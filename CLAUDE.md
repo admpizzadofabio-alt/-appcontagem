@@ -74,7 +74,8 @@ cd mobile && npx expo start        # Dev server
 - Peso/quantidade usam number (não string)
 - IDs são UUID v4
 
-## 🚀 Economia de Tokens
-- NUNCA reescreva arquivo inteiro — use edições cirúrgicas
-- NUNCA reescreva StyleSheet se só alterou lógica
-- Peça apenas os arquivos necessários para a tarefa
+## 🚀 Economia de Tokens (Framework FET)
+- **Cirúrgico:** NUNCA reescreva arquivos inteiros. Peça/faça apenas edições pontuais.
+- **Rewind de Erros:** Se a IA errar um código, NÃO escreva "deu erro". Delete a resposta da IA e altere seu prompt inicial. (Mantém o contexto limpo).
+- **Session Handoff:** NUNCA passe de 15 mensagens no mesmo chat. Peça um resumo do status atual, feche o chat, e inicie um novo colando o resumo.
+- **Modo Manual:** Peça/forneça apenas o arquivo exato da tarefa (ex: `@EstoqueScreen.tsx`).

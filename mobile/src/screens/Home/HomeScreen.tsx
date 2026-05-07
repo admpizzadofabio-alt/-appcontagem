@@ -10,6 +10,7 @@ import { useTurnoAtualQuery } from '../../services/api/turnos'
 import { StatCard } from '../../components/StatCard'
 import { Card } from '../../components/Card'
 import { SectionHeader } from '../../components/SectionHeader'
+import { BotaoColibriCarregar } from '../../components/BotaoColibriCarregar'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
@@ -124,6 +125,12 @@ export function HomeScreen() {
             <Text style={s.turnoStatusArrow}>›</Text>
           </TouchableOpacity>
         )}
+
+        {/* Vendas Colibri — importar antes de abrir turno/contar */}
+        <SectionHeader title="Integração Colibri" />
+        <View style={{ marginBottom: 16 }}>
+          <BotaoColibriCarregar />
+        </View>
 
         {/* Ações rápidas */}
         <SectionHeader title="Ações Rápidas" />
