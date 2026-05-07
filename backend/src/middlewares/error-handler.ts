@@ -37,6 +37,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   return res.status(500).json({
     code: 'INTERNAL_ERROR',
-    message: env.NODE_ENV === 'production' ? 'Erro interno do servidor' : String(err),
+    message: 'Erro interno do servidor',
   })
 }

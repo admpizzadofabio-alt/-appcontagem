@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js'
+import { NotFoundError, ForbiddenError } from '../../shared/errors.js'
 
 export async function listar(local?: string) {
   if (local) {
@@ -41,7 +42,11 @@ export async function summary() {
   return { totalValor, totalItens, alertas: alertas.length, itensAlerta: alertas.map((a: Item) => ({ ...a.produto, quantidadeAtual: a.quantidadeAtual, local: a.local })) }
 }
 
-export async function ajustar(id: string, quantidade: number, usuarioId: string) {
+export async function ajustar(id: string, quantidade: number, usuarioId: string, setor: string, nivelAcesso: string) {
+  const registro = await prisma.estoqueAtual.findUnique({ where: { id } })
+  if (!registro) throw new NotFoundError('Registro de estoque não encontrado')
+  if (nivelAcesso !== 'Admin' && registro.local !== setor)
+    throw new ForbiddenError(`Supervisor do setor "${setor}" não pode ajustar estoque de "${registro.local}"`)
   return prisma.estoqueAtual.update({ where: { id }, data: { quantidadeAtual: quantidade, atualizadoPor: usuarioId } })
 }
 

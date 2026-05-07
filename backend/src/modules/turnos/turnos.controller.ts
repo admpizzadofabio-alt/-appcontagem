@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
+import { AppError } from '../../shared/errors.js'
 import * as turnos from './turnos.service.js'
 import * as rascunhos from './rascunhos.service.js'
 
@@ -66,20 +67,20 @@ export async function getContagemCega(req: Request, res: Response, next: NextFun
 export async function postContagemItem(req: Request, res: Response, next: NextFunction) {
   try {
     const { produtoId, quantidadeContada } = registrarItemContagemSchema.parse(req.body)
-    res.json(await turnos.registrarItem(String(req.params.id), produtoId, quantidadeContada, req.user!.sub))
+    res.json(await turnos.registrarItem(String(req.params.id), req.user!.sub, req.user!.nivelAcesso, produtoId, quantidadeContada))
   } catch (e) { next(e) }
 }
 
 export async function postContagemFoto(req: Request, res: Response, next: NextFunction) {
   try {
     const { produtoId, fotoEvidencia, justificativa } = finalizarItemDivergenciaSchema.parse(req.body)
-    res.json(await turnos.registrarFotoEvidencia(String(req.params.id), produtoId, fotoEvidencia, justificativa))
+    res.json(await turnos.registrarFotoEvidencia(String(req.params.id), req.user!.sub, req.user!.nivelAcesso, produtoId, fotoEvidencia, justificativa))
   } catch (e) { next(e) }
 }
 
 export async function postContagemFinalizar(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await turnos.finalizarContagem(String(req.params.id), req.user!.sub))
+    res.json(await turnos.finalizarContagem(String(req.params.id), req.user!.sub, req.user!.nivelAcesso))
   } catch (e) { next(e) }
 }
 
@@ -95,6 +96,8 @@ export async function postRascunho(req: Request, res: Response, next: NextFuncti
     const data = criarRascunhoEntradaSchema.parse(req.body)
     const contagemId = String(req.params.id)
     const contagem = await turnos.listarItensContagem(contagemId)
+    if (!['Admin', 'Supervisor'].includes(req.user!.nivelAcesso) && contagem.operadorId !== req.user!.sub)
+      throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
     res.status(201).json(
       await rascunhos.criarRascunho({
         ...data,

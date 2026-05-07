@@ -1,5 +1,5 @@
 import { prisma } from '../../config/prisma.js'
-import { NotFoundError, BusinessRuleError } from '../../shared/errors.js'
+import { AppError, NotFoundError, BusinessRuleError } from '../../shared/errors.js'
 import { getDiaOperacional, categorizarDivergencia } from '../../shared/diaOperacional.js'
 import { validarBase64Imagem } from '../../shared/validarImagem.js'
 import { logger } from '../../config/logger.js'
@@ -142,10 +142,13 @@ export async function listarItensContagemCega(contagemId: string) {
   return { ...contagem, itens: itensCegos }
 }
 
-export async function registrarItem(contagemId: string, produtoId: string, quantidadeContada: number, contadoPor: string) {
-  const item = await prisma.itemContagem.findFirst({
-    where: { contagemId, produtoId },
-  })
+export async function registrarItem(contagemId: string, operadorId: string, nivelAcesso: string, produtoId: string, quantidadeContada: number) {
+  const contagem = await prisma.contagemEstoque.findUnique({ where: { id: contagemId } })
+  if (!contagem) throw new NotFoundError('Contagem não encontrada')
+  if (!['Admin', 'Supervisor'].includes(nivelAcesso) && contagem.operadorId !== operadorId)
+    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
+
+  const item = await prisma.itemContagem.findFirst({ where: { contagemId, produtoId } })
   if (!item) throw new NotFoundError('Item não encontrado na contagem')
 
   const diferenca = quantidadeContada - item.quantidadeSistema
@@ -153,20 +156,18 @@ export async function registrarItem(contagemId: string, produtoId: string, quant
 
   return prisma.itemContagem.update({
     where: { id: item.id },
-    data: {
-      quantidadeContada,
-      diferenca,
-      divergenciaCategoria: categoria,
-      contadoPor,
-    },
+    data: { quantidadeContada, diferenca, divergenciaCategoria: categoria, contadoPor: operadorId },
   })
 }
 
-export async function registrarFotoEvidencia(contagemId: string, produtoId: string, fotoEvidencia: string, justificativa: string) {
+export async function registrarFotoEvidencia(contagemId: string, operadorId: string, nivelAcesso: string, produtoId: string, fotoEvidencia: string, justificativa: string) {
+  const contagem = await prisma.contagemEstoque.findUnique({ where: { id: contagemId } })
+  if (!contagem) throw new NotFoundError('Contagem não encontrada')
+  if (!['Admin', 'Supervisor'].includes(nivelAcesso) && contagem.operadorId !== operadorId)
+    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
+
   validarBase64Imagem(fotoEvidencia, 'fotoEvidencia')
-  const item = await prisma.itemContagem.findFirst({
-    where: { contagemId, produtoId },
-  })
+  const item = await prisma.itemContagem.findFirst({ where: { contagemId, produtoId } })
   if (!item) throw new NotFoundError('Item não encontrado')
   if (item.divergenciaCategoria !== 'grande') {
     throw new BusinessRuleError('Foto só é exigida para divergências grandes')
@@ -177,12 +178,14 @@ export async function registrarFotoEvidencia(contagemId: string, produtoId: stri
   })
 }
 
-export async function finalizarContagem(contagemId: string, operadorId: string) {
+export async function finalizarContagem(contagemId: string, operadorId: string, nivelAcesso: string) {
   const contagem = await prisma.contagemEstoque.findUnique({
     where: { id: contagemId },
     include: { itens: true },
   })
   if (!contagem) throw new NotFoundError('Contagem não encontrada')
+  if (!['Admin', 'Supervisor'].includes(nivelAcesso) && contagem.operadorId !== operadorId)
+    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
   if (contagem.status !== 'Aberta') throw new BusinessRuleError('Contagem já finalizada')
 
   const naoContados = contagem.itens.filter((i) => i.quantidadeContada === null)

@@ -25,18 +25,18 @@ export async function buscarHandler(req: Request, res: Response, next: NextFunct
 export async function salvarItemHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { produtoId, quantidadeContada, causaDivergencia } = salvarItemSchema.parse(req.body)
-    res.json(await service.salvarItem(String(req.params.id), produtoId, quantidadeContada, causaDivergencia))
+    res.json(await service.salvarItem(String(req.params.id), req.user!.sub, req.user!.nivelAcesso, produtoId, quantidadeContada, causaDivergencia))
   } catch (err) { next(err) }
 }
 
 export async function processarHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await service.processar(String(req.params.id), req.user!.sub, req.user!.nome, req.user!.setor))
+    res.json(await service.processar(String(req.params.id), req.user!.sub, req.user!.nivelAcesso, req.user!.nome, req.user!.setor))
   } catch (err) { next(err) }
 }
 
 export async function cancelarHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await service.cancelar(String(req.params.id)))
+    res.json(await service.cancelar(String(req.params.id), req.user!.sub, req.user!.nivelAcesso))
   } catch (err) { next(err) }
 }

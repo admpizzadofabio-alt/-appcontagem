@@ -1,13 +1,12 @@
 import { prisma } from '../../config/prisma.js'
-import { NotFoundError } from '../../shared/errors.js'
+import { NotFoundError, ForbiddenError } from '../../shared/errors.js'
 import { StatusPedido } from '@prisma/client'
 import { v4 as uuid } from 'uuid'
 
 export async function listar(filtros: { status?: string; setor?: string; nivelAcesso?: string }) {
   const where: any = {}
   if (filtros.status) where.status = filtros.status
-  if (filtros.setor && filtros.nivelAcesso !== 'Admin') where.setorSolicitante = filtros.setor
-  else if (filtros.setor) where.setorSolicitante = filtros.setor
+  if (filtros.setor) where.setorSolicitante = filtros.setor
 
   return prisma.pedidoCompra.findMany({
     where,
@@ -27,9 +26,11 @@ export async function criar(itens: Array<{ produtoId?: string; nomeProduto: stri
   )
 }
 
-export async function atualizarStatus(id: string, status: string) {
+export async function atualizarStatus(id: string, status: string, setor: string, nivelAcesso: string) {
   const pedido = await prisma.pedidoCompra.findUnique({ where: { id } })
   if (!pedido) throw new NotFoundError('Pedido não encontrado')
+  if (nivelAcesso !== 'Admin' && pedido.setorSolicitante !== setor)
+    throw new ForbiddenError(`Supervisor do setor "${setor}" não pode alterar pedidos de "${pedido.setorSolicitante}"`)
   return prisma.pedidoCompra.update({ where: { id }, data: { status: status as StatusPedido } })
 }
 

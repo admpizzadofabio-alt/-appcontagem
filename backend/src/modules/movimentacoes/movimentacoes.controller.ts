@@ -33,14 +33,15 @@ export async function listarPendentesHandler(req: Request, res: Response, next: 
 
 export async function listarTransferenciasPendentesHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const local = String(req.query.local ?? req.user!.setor)
+    const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
+    const local = isPrivileged ? String(req.query.local ?? req.user!.setor) : req.user!.setor
     res.json(await service.listarTransferenciasPendentes(local))
   } catch (err) { next(err) }
 }
 
 export async function confirmarTransferenciaHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    await service.confirmarTransferencia(String(req.params.id), req.user!.sub, req.user!.nome, req.user!.setor)
+    await service.confirmarTransferencia(String(req.params.id), req.user!.sub, req.user!.nome, req.user!.setor, req.user!.nivelAcesso)
     res.json({ message: 'Transferência confirmada com sucesso' })
   } catch (err) { next(err) }
 }

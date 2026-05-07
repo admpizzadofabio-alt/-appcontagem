@@ -26,6 +26,9 @@ import { prisma } from './config/prisma.js'
 
 const app = express()
 
+// trust proxy = 1: necessário para rate limiter funcionar corretamente atrás do Nginx
+app.set('trust proxy', 1)
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,

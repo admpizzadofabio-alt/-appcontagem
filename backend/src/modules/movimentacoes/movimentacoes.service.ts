@@ -151,12 +151,14 @@ export async function listarTransferenciasPendentes(localDestino: string) {
   })
 }
 
-export async function confirmarTransferencia(movId: string, confirmadorId: string, confirmadorNome: string, setor: string) {
+export async function confirmarTransferencia(movId: string, confirmadorId: string, confirmadorNome: string, setor: string, nivelAcesso: string) {
   return prisma.$transaction(async (tx) => {
     const mov = await tx.movimentacaoEstoque.findUnique({ where: { id: movId } })
     if (!mov) throw new NotFoundError('Transferência não encontrada')
     if (mov.tipoMov !== 'Transferencia') throw new ForbiddenError('Movimentação não é uma transferência')
     if (mov.aprovacaoStatus !== StatusAprovacao.Pendente) throw new ForbiddenError('Transferência já foi confirmada ou rejeitada')
+    if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
+      throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode confirmar esta transferência`)
 
     await tx.movimentacaoEstoque.update({
       where: { id: movId },
