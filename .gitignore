@@ -13,6 +13,9 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
+*/.env.production
+deploy/.env.production
 !.env.example
 !.env.local.example
 
