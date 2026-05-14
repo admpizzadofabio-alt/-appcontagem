@@ -8,8 +8,8 @@ export const iniciarContagemSchema = z.object({
 
 export const salvarItemSchema = z.object({
   produtoId: z.string().uuid(),
-  quantidadeContada: z.coerce.number().min(0),
-  causaDivergencia: z.string().optional(),
+  quantidadeContada: z.coerce.number().min(0).max(999999),
+  causaDivergencia: z.string().max(500).optional(),
 })
 
 export const processarSchema = z.object({

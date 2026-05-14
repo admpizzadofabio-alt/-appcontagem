@@ -15,12 +15,15 @@ export type AppStackParams = {
   Transferencia: undefined
 Pedidos: undefined
   Relatorios: undefined
+  Analytics: undefined
+  Auditoria: undefined
+  Setup2FA: undefined
   Admin: undefined
   Usuarios: undefined
   Produtos: undefined
   Colibri: undefined
-  AbrirCaixa: { local?: 'Bar' | 'Delivery' } | undefined
-  ContagemTurno: { contagemId: string }
+  AbrirTurno: { local?: 'Bar' | 'Delivery' } | undefined
+  ContagemTurno: { contagemId: string; colibriPendente?: boolean }
   ResumoContagem: { contagemId: string }
   ErroComanda: { local: string; turnoId?: string | null }
   MeuTurno: undefined

@@ -1,6 +1,15 @@
 import { Request, Response, NextFunction } from 'express'
 import { criarProdutoSchema, atualizarProdutoSchema } from './produtos.schemas.js'
 import * as service from './produtos.service.js'
+import { criar as criarMov } from '../movimentacoes/movimentacoes.service.js'
+import { AppError } from '../../shared/errors.js'
+import { z } from 'zod'
+
+const cargaInicialSchema = z.object({
+  quantidade: z.coerce.number().positive().max(999999),
+  local: z.enum(['Bar', 'Delivery']),
+  observacao: z.string().max(500).optional(),
+})
 
 export async function listarHandler(req: Request, res: Response, next: NextFunction) {
   try {
@@ -33,5 +42,24 @@ export async function excluirFisicoHandler(req: Request, res: Response, next: Ne
   try {
     await service.excluirFisico(String(req.params.id))
     res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+export async function cargaInicialHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { quantidade, local, observacao } = cargaInicialSchema.parse(req.body)
+    const produtoId = String(req.params.id)
+    const mov = await criarMov({
+      produtoId,
+      tipoMov: 'CargaInicial',
+      quantidade,
+      localOrigem: local,
+      usuarioId: req.user!.sub,
+      usuarioNome: req.user!.nome,
+      setor: req.user!.setor,
+      nivelAcesso: req.user!.nivelAcesso,
+      observacao: observacao ?? `Carga inicial: ${quantidade} un em ${local}`,
+    })
+    res.status(201).json({ ok: true, movimentacao: mov, mensagem: 'Carga inicial registrada. Marco operacional definido.' })
   } catch (err) { next(err) }
 }

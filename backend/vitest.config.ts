@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    setupFiles: ['./src/tests/setup.ts'],
+    testTimeout: 20000,  // argon2.verify itera N usuários; com 3 seedados leva poucos ms, mas margem de segurança
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

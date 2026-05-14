@@ -28,7 +28,7 @@ export async function getAtual(req: Request, res: Response, next: NextFunction) 
 export async function postAbrir(req: Request, res: Response, next: NextFunction) {
   try {
     const { local } = abrirTurnoSchema.parse(req.body)
-    res.status(201).json(await turnos.abrirTurno(local, req.user!.sub))
+    res.status(201).json(await turnos.abrirTurno(local, req.user!.sub, req.user!.setor, req.user!.nivelAcesso))
   } catch (e) { next(e) }
 }
 
@@ -40,7 +40,7 @@ export async function postFechar(req: Request, res: Response, next: NextFunction
 
 export async function deleteTurno(req: Request, res: Response, next: NextFunction) {
   try {
-    await turnos.deletarTurno(String(req.params.id))
+    await turnos.deletarTurno(String(req.params.id), req.user!.setor, req.user!.nivelAcesso)
     res.json({ ok: true })
   } catch (e) { next(e) }
 }
@@ -54,7 +54,16 @@ export async function getHistorico(req: Request, res: Response, next: NextFuncti
 
 export async function getContagem(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await turnos.listarItensContagem(String(req.params.id)))
+    const id = String(req.params.id)
+    const user = req.user!
+    const contagem = await turnos.listarItensContagem(id)
+
+    const isSup = user.nivelAcesso === 'Admin' || user.nivelAcesso === 'Supervisor'
+    const isDono = contagem.operadorId === user.sub
+    if (!isSup && !isDono) {
+      throw new AppError('Acesso negado: contagem de outro operador', 403, 'FORBIDDEN')
+    }
+    res.json(contagem)
   } catch (e) { next(e) }
 }
 
@@ -128,5 +137,21 @@ export async function postDecidirRascunho(req: Request, res: Response, next: Nex
         motivoDecisao,
       ),
     )
+  } catch (e) { next(e) }
+}
+
+export async function getRevisoesPendentes(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await turnos.listarRevisoesPendentes())
+  } catch (e) { next(e) }
+}
+
+export async function postDecidirRevisao(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { acao, decisao, novaQuantidade } = req.body as { acao: 'aceitar' | 'ajustar' | 'perda' | 'recontagem'; decisao?: string; novaQuantidade?: number }
+    if (!['aceitar', 'ajustar', 'perda', 'recontagem'].includes(acao)) {
+      throw new AppError('Ação inválida', 400)
+    }
+    res.json(await turnos.decidirRevisao(String(req.params.id), acao, req.user!.sub, decisao, novaQuantidade))
   } catch (e) { next(e) }
 }

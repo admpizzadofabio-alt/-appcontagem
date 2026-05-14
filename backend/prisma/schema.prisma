@@ -42,22 +42,23 @@ enum StatusPedido {
 }
 
 enum PinFormat {
-  plaintext
-  sha256
-  bcrypt
+  argon2id
 }
 
 model Usuario {
   id          String      @id @default(uuid())
   nome        String
   pin         String
-  pinFormat      PinFormat   @default(bcrypt)
+  pinFormat      PinFormat   @default(argon2id)
   setor          String
   nivelAcesso    NivelAcesso @default(Operador)
   ativo          Boolean     @default(true)
   loginAttempts  Int         @default(0)
   bloqueadoAte   DateTime?
   criadoEm       DateTime    @default(now())
+  // 2FA opcional (TOTP RFC 6238). Quando totpSecret != null, login exige código.
+  totpSecret     String?
+  totpEnabled    Boolean     @default(false)
 
   movimentacoes    MovimentacaoEstoque[]
   contagens        ContagemEstoque[]
@@ -94,6 +95,7 @@ model Produto {
   imagem        String?
   criadoEm      DateTime @default(now())
   ultimaContagemEm DateTime?
+  marcoInicialEm DateTime? // só descontar Colibri a partir desta data; null = produto não opera
 
   estoque          EstoqueAtual[]
   movimentacoes    MovimentacaoEstoque[]
@@ -135,6 +137,9 @@ model MovimentacaoEstoque {
   turnoId           String?
   idGrupoCorrecao   String?
   origemRascunho    String?
+  // JSON.stringify(string[]) — IDs únicos das vendas Colibri agregadas neste movimento.
+  // Usado para evitar duplicação ao re-importar com ranges diferentes.
+  idItemVendasColibri String?
 
   produto    Produto  @relation(fields: [produtoId], references: [id])
   usuario    Usuario  @relation(fields: [usuarioId], references: [id])
@@ -193,15 +198,24 @@ model ItemContagem {
   diferenca         Float   @default(0)
   causaDivergencia  String?
   contadoPor        String?
-  divergenciaCategoria String? // "ok" | "leve" | "grande"
+  divergenciaCategoria String? // "ok" | "leve" | "grande" | "venda_sem_estoque"
   fotoEvidencia     String?
   justificativa     String?
+  justificativaCategoria String? // "erro_contagem" | "venda_sem_estoque" | "possivel_desvio" | "quebra_perda" | "outro"
+  vendidoColibri    Float   @default(0) // qtd vendida no Colibri desde última contagem
+  precisaRevisaoAdmin Boolean @default(false) // flag para fila de revisão Admin
+  revisaoStatus     String? // "Pendente" | "Aceita" | "Ajustada" | "Perda" | "Recontagem"
+  revisaoDecisao    String?
+  revisadoPor       String?
+  revisadoEm        DateTime?
   ajusteAprovado    Boolean @default(false)
   ajusteAprovadoPor String?
   ajusteDecidoEm    DateTime?
 
   contagem  ContagemEstoque @relation(fields: [contagemId], references: [id], onDelete: Cascade)
   produto   Produto         @relation(fields: [produtoId], references: [id])
+
+  @@index([precisaRevisaoAdmin, revisaoStatus])
 }
 
 model PedidoCompra {
@@ -233,6 +247,12 @@ model LogAuditoria {
   detalhes     String?
 
   usuario  Usuario? @relation(fields: [usuarioId], references: [id])
+
+  // Índices para queries de auditoria — sem isso, em meses a tabela vira table-scan
+  @@index([dataEvento])
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([entidade, idReferencia])
 }
 
 model ColibriProduto {
@@ -324,6 +344,7 @@ model ColibriCatalogo {
   grupo       String
   ativo       Boolean  @default(true)
   sincronizadoEm DateTime @default(now())
+  visto       Boolean  @default(false)
 }
 
 model ColibriImportacao {

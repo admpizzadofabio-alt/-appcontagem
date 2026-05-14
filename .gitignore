@@ -50,3 +50,19 @@ desktop.ini
 
 # ── Docker (dados locais, não config) ───────────────────
 docker/data/
+
+# ── Backups locais (contém dados sensíveis) ────────────
+backend/backups/
+*.backup.json
+
+# ── Scripts de debug/investigação (ad-hoc, não versionar) ─
+backend/scripts/check-*.ts
+backend/scripts/debug-*.ts
+backend/scripts/investigar-*.ts
+backend/scripts/fix-mov-retroativo.ts
+backend/scripts/limpar-orfaos.ts
+backend/scripts/test-carga-inicial.ts
+backend/scripts/limpar-turnos-hoje.ts
+backend/scripts/fix-estoque-*.ts
+backend/scripts/fix-status-pendente.ts
+backend/scripts/fetch-colibri-ontem.ts

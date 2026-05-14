@@ -15,6 +15,8 @@ export type Turno = {
   fechadoSemContagem: boolean
   abertoPorNome?: string | null
   contagem?: ContagemDetalhe | null
+  // Indica se Colibri está com importação atrasada para o diaOperacional desse turno
+  colibriPendente?: boolean
 }
 
 export type ItemContagem = {
@@ -23,12 +25,21 @@ export type ItemContagem = {
   quantidadeSistema: number
   quantidadeContada: number
   diferenca: number
-  divergenciaCategoria?: 'ok' | 'leve' | 'grande' | null
+  divergenciaCategoria?: 'ok' | 'leve' | 'grande' | 'venda_sem_estoque' | null
   fotoEvidencia?: string | null
   justificativa?: string | null
+  justificativaCategoria?: 'erro_contagem' | 'venda_sem_estoque' | 'possivel_desvio' | 'quebra_perda' | 'outro' | null
+  vendidoColibri?: number
+  precisaRevisaoAdmin?: boolean
+  revisaoStatus?: 'Pendente' | 'Aceita' | 'Ajustada' | 'Perda' | 'Recontagem' | null
   ajusteAprovado: boolean
   contadoPor?: string | null
   produto: { id: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number }
+}
+
+export type RevisaoPendente = ItemContagem & {
+  contagem: { local: string; dataContagem: string; operadorId: string; diaOperacional: string }
+  produto: { nomeBebida: string; unidadeMedida: string; custoUnitario: number }
 }
 
 // Versão sem quantidadeSistema — usada durante a contagem para garantir modo cego
@@ -169,6 +180,15 @@ export const turnosApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/turnos/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Turno', 'Contagem', 'Estoque', 'Movimentacoes'],
     }),
+
+    revisoesPendentes: build.query<RevisaoPendente[], void>({
+      query: () => ({ url: '/turnos/revisoes/pendentes' }),
+      providesTags: ['Revisoes'],
+    }),
+    decidirRevisao: build.mutation<void, { id: string; acao: 'aceitar' | 'ajustar' | 'perda' | 'recontagem'; decisao?: string; novaQuantidade?: number }>({
+      query: ({ id, ...data }) => ({ url: `/turnos/revisoes/${id}/decidir`, method: 'POST', data }),
+      invalidatesTags: ['Revisoes', 'Estoque', 'Movimentacoes'],
+    }),
   }),
   overrideExisting: false,
 })
@@ -189,4 +209,6 @@ export const {
   useDashboardAdminQuery,
   useFecharTurnoMutation,
   useDeletarTurnoMutation,
+  useRevisoesPendentesQuery,
+  useDecidirRevisaoMutation,
 } = turnosApi

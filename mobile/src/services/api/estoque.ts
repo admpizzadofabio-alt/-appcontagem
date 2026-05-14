@@ -9,6 +9,30 @@ export type EstoqueItem = {
   produto: { nomeBebida: string; categoria: string; unidadeMedida: string; estoqueMinimo: number; custoUnitario: number }
 }
 
+export type EstoqueHistoricoItem = {
+  produtoId: string
+  nomeBebida: string
+  categoria: string
+  unidadeMedida: string
+  custoUnitario: number
+  abertura: number
+  contado: number
+  divergencia: number
+  colibri: number
+  entradas: number
+  perdas: number
+  fechamento: number
+}
+
+export type EstoqueHistorico = {
+  temDados: boolean
+  data: string
+  local: string
+  turno: { abertoEm: string; fechadoEm: string | null; status: string } | null
+  resumo: { totalDivergencias: number; totalColibri: number; totalEntradas: number; totalPerdas: number } | null
+  produtos: EstoqueHistoricoItem[]
+}
+
 export type EstoqueSummary = {
   totalValor: number
   totalItens: number
@@ -26,8 +50,12 @@ export const estoqueApi = baseApi.injectEndpoints({
       query: () => ({ url: '/estoque/summary' }),
       providesTags: ['Estoque'],
     }),
+    historicoEstoque: build.query<EstoqueHistorico, { data: string; local: string }>({
+      query: (p) => ({ url: '/estoque/historico', params: p }),
+      providesTags: ['Estoque'],
+    }),
   }),
   overrideExisting: false,
 })
 
-export const { useListarEstoqueQuery, useSummaryEstoqueQuery } = estoqueApi
+export const { useListarEstoqueQuery, useSummaryEstoqueQuery, useHistoricoEstoqueQuery } = estoqueApi

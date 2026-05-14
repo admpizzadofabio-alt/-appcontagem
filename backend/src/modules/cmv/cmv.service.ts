@@ -38,7 +38,7 @@ export async function getCmvBebidas(dataInicio: Date, dataFim: Date) {
     const cat = m.produto.categoria
     const valor = m.quantidade * m.produto.custoUnitario
     const acc = get(cat)
-    if (m.tipoMov === 'Entrada' || m.tipoMov === 'CargaInicial') {
+    if (m.tipoMov === 'Entrada') {
       acc.entradasQtd   += m.quantidade
       acc.entradasValor += valor
     } else if (m.tipoMov === 'Saida') {

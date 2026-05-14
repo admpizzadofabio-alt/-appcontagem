@@ -1,5 +1,5 @@
 import { prisma } from '../../config/prisma.js'
-import { AppError, NotFoundError, ValidationError } from '../../shared/errors.js'
+import { AppError, NotFoundError } from '../../shared/errors.js'
 import { StatusContagem, TipoMovimentacao } from '@prisma/client'
 
 export async function iniciar(local: string, operadorId: string, modoCego = true, threshold = 2) {
@@ -67,9 +67,12 @@ export async function buscar(id: string, revelarSistema = false) {
   return c
 }
 
-export async function listar(local?: string) {
+export async function listar(local?: string, operadorId?: string) {
+  const where: any = {}
+  if (local) where.local = local
+  if (operadorId) where.operadorId = operadorId
   return prisma.contagemEstoque.findMany({
-    where: local ? { local } : {},
+    where,
     orderBy: { dataContagem: 'desc' },
     take: 50,
     include: { operador: { select: { nome: true } } },
@@ -80,7 +83,7 @@ export async function salvarItem(contagemId: string, operadorId: string, nivelAc
   const contagem = await prisma.contagemEstoque.findUnique({ where: { id: contagemId } })
   if (!contagem) throw new NotFoundError('Contagem não encontrada')
   if (!['Admin', 'Supervisor'].includes(nivelAcesso) && contagem.operadorId !== operadorId)
-    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
+    throw new NotFoundError('Contagem não encontrada')
   if (contagem.status !== StatusContagem.Aberta) throw new AppError('Contagem não está aberta')
 
   const item = await prisma.itemContagem.findFirst({ where: { contagemId, produtoId } })
@@ -101,7 +104,7 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
   })
   if (!contagem) throw new NotFoundError('Contagem não encontrada')
   if (!['Admin', 'Supervisor'].includes(nivelAcesso) && contagem.operadorId !== operadorId)
-    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
+    throw new NotFoundError('Contagem não encontrada')
   if (contagem.status !== StatusContagem.Aberta) throw new AppError('Contagem não está aberta')
 
   const divergencias = contagem.itens.filter((i) => i.diferenca !== 0)
@@ -169,7 +172,7 @@ export async function cancelar(contagemId: string, operadorId: string, nivelAces
   const c = await prisma.contagemEstoque.findUnique({ where: { id: contagemId } })
   if (!c) throw new NotFoundError('Contagem não encontrada')
   if (!['Admin', 'Supervisor'].includes(nivelAcesso) && c.operadorId !== operadorId)
-    throw new AppError('Acesso negado: contagem pertence a outro operador', 403, 'FORBIDDEN')
+    throw new NotFoundError('Contagem não encontrada')
   if (c.status !== StatusContagem.Aberta) throw new AppError('Apenas contagens abertas podem ser canceladas')
   return prisma.contagemEstoque.update({ where: { id: contagemId }, data: { status: StatusContagem.Cancelada } })
 }

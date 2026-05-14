@@ -1,11 +1,24 @@
 import React, { useState } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, Alert,
-  TextInput, TouchableOpacity, Modal, Pressable,
+  TextInput, TouchableOpacity, Modal, Pressable, Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import * as ImagePicker from 'expo-image-picker'
+
+async function pickPhoto(): Promise<string | null> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync()
+  if (!perm.granted) {
+    Alert.alert('Permissão negada', 'Permita o uso da câmera nas configurações')
+    return null
+  }
+  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5, base64: true })
+  if (!r.canceled && r.assets[0]?.base64) return `data:image/jpeg;base64,${r.assets[0].base64}`
+  return null
+}
 import {
   useListarProdutosQuery,
+  useCargaInicialMutation,
   useCriarProdutoMutation,
   useAtualizarProdutoMutation,
   useDeletarProdutoMutation,
@@ -31,6 +44,34 @@ export function ProdutosScreen() {
   const [atualizar, { isLoading: salvando }] = useAtualizarProdutoMutation()
   const [deletar]  = useDeletarProdutoMutation()
   const [excluir]  = useExcluirProdutoMutation()
+  const [cargaInicial] = useCargaInicialMutation()
+
+  async function handleCargaInicial(p: { id: string; nomeBebida: string; setorPadrao: string }) {
+    Alert.prompt(
+      'Carga Inicial — ' + p.nomeBebida,
+      `Quantidade física no estoque agora (${p.setorPadrao === 'Delivery' ? 'Delivery' : 'Bar'}).\nA partir deste momento o Colibri começa a descontar.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: async (txt?: string) => {
+            const qtd = parseFloat((txt ?? '').replace(',', '.'))
+            if (Number.isNaN(qtd) || qtd <= 0) return Alert.alert('Atenção', 'Quantidade inválida')
+            const local = p.setorPadrao === 'Delivery' ? 'Delivery' : 'Bar'
+            try {
+              const r = await cargaInicial({ id: p.id, quantidade: qtd, local }).unwrap()
+              Alert.alert('✅ Carga registrada', r.mensagem)
+            } catch (e: any) {
+              Alert.alert('Erro', e.message)
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'numeric',
+    )
+  }
 
   // ── Estado: criar ──
   const [showForm,   setShowForm]   = useState(false)
@@ -41,6 +82,7 @@ export function ProdutosScreen() {
   const [minimo,     setMinimo]     = useState('')
   const [threshold,  setThreshold]  = useState('5')
   const [setor,      setSetor]      = useState<Setor>('Todos')
+  const [imagem,     setImagem]     = useState<string | null>(null)
 
   // ── Estado: editar ──
   const [editProd,      setEditProd]      = useState<Produto | null>(null)
@@ -49,6 +91,7 @@ export function ProdutosScreen() {
   const [editMinimo,    setEditMinimo]    = useState('')
   const [editThreshold, setEditThreshold] = useState('5')
   const [editSetor,     setEditSetor]     = useState<Setor>('Todos')
+  const [editImagem,    setEditImagem]    = useState<string | null>(null)
 
   const [busca,       setBusca]       = useState('')
   const [filtroAtivo, setFiltroAtivo] = useState<boolean | null>(true) // null = todos
@@ -75,9 +118,10 @@ export function ProdutosScreen() {
         estoqueMinimo: parseFloat(minimo) || 0,
         perdaThreshold: parseFloat(threshold) || 5,
         setorPadrao: setor,
-      }).unwrap()
+        imagem: imagem ?? undefined,
+      } as any).unwrap()
       setNome(''); setCusto(''); setMinimo(''); setThreshold('5')
-      setCategoria('Cerveja'); setUnidade('un'); setSetor('Todos')
+      setCategoria('Cerveja'); setUnidade('un'); setSetor('Todos'); setImagem(null)
       setShowForm(false)
       Alert.alert('✅ Produto criado!')
     } catch (e: any) { Alert.alert('Erro', e.message) }
@@ -275,6 +319,15 @@ export function ProdutosScreen() {
               </View>
             </View>
 
+            <Text style={s.fieldLabel}>📸 Foto (opcional)</Text>
+            {imagem && <Image source={{ uri: imagem }} style={s.fotoPreview} />}
+            <TouchableOpacity style={s.fotoBtn} onPress={async () => {
+              const img = await pickPhoto()
+              if (img) setImagem(img)
+            }}>
+              <Text style={s.fotoBtnTxt}>{imagem ? '🔄 Trocar foto' : '📷 Tirar foto'}</Text>
+            </TouchableOpacity>
+
             <ActionButton label="Salvar Produto" onPress={handleCriar} loading={criando} />
           </Card>
         )}
@@ -290,7 +343,12 @@ export function ProdutosScreen() {
               <View style={s.prodHeader}>
                 <View style={s.prodInfo}>
                   <Text style={s.prodNome}>{p.nomeBebida}</Text>
-                  <Text style={s.prodMeta}>{p.categoria} · {p.unidadeMedida} · Mín: {p.estoqueMinimo}</Text>
+                  <Text style={s.prodMeta}>
+                    {p.categoria} · {p.unidadeMedida} ·{' '}
+                    <Text style={p.estoqueMinimo === 0 ? s.minimoZero : s.minimoOk}>
+                      Mín: {p.estoqueMinimo === 0 ? '⚠️ não definido' : p.estoqueMinimo}
+                    </Text>
+                  </Text>
                 </View>
                 <View style={s.prodRight}>
                   <Text style={s.prodCusto}>R$ {p.custoUnitario.toFixed(2)}</Text>
@@ -302,11 +360,22 @@ export function ProdutosScreen() {
                   </View>
                 </View>
               </View>
+              {!p.marcoInicialEm && p.ativo && (
+                <TouchableOpacity onPress={() => handleCargaInicial(p)} style={s.cargaBanner}>
+                  <Text style={s.cargaBannerTxt}>⚠️ Sem carga inicial — Colibri não opera. Toque para definir.</Text>
+                </TouchableOpacity>
+              )}
               <View style={s.acoes}>
                 {/* Editar sempre disponível */}
                 <TouchableOpacity onPress={() => abrirEdicao(p)} style={s.editarBtnWrap}>
                   <Text style={s.editarBtn}>✏️ Editar</Text>
                 </TouchableOpacity>
+
+                {p.ativo && p.marcoInicialEm && (
+                  <TouchableOpacity onPress={() => handleCargaInicial(p)}>
+                    <Text style={s.editarBtn}>📦 Carga</Text>
+                  </TouchableOpacity>
+                )}
 
                 {p.ativo ? (
                   <TouchableOpacity onPress={() => handleDeletar(p.id, p.nomeBebida)}>
@@ -358,6 +427,25 @@ export function ProdutosScreen() {
               ))}
             </View>
 
+            {/* Estoque mínimo em destaque */}
+            <View style={[s.minimoBox, !editMinimo || editMinimo === '0' ? s.minimoBoxAlerta : s.minimoBoxOk]}>
+              <View style={s.minimoBoxHeader}>
+                <Text style={s.minimoBoxLabel}>⚠️ Estoque Mínimo</Text>
+                {(!editMinimo || editMinimo === '0') && (
+                  <Text style={s.minimoBoxDica}>Não configurado — alerta não vai funcionar</Text>
+                )}
+              </View>
+              <TextInput
+                style={[s.input, s.minimoInput]}
+                value={editMinimo}
+                onChangeText={setEditMinimo}
+                placeholder="Ex: 24"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+              />
+              <Text style={s.minimoHint}>Abaixo desse valor o produto aparece como "Baixo" no estoque</Text>
+            </View>
+
             <View style={s.row}>
               <View style={s.col}>
                 <Text style={s.fieldLabel}>Custo (R$)</Text>
@@ -371,18 +459,7 @@ export function ProdutosScreen() {
                 />
               </View>
               <View style={s.col}>
-                <Text style={s.fieldLabel}>Estoque mín.</Text>
-                <TextInput
-                  style={s.input}
-                  value={editMinimo}
-                  onChangeText={setEditMinimo}
-                  placeholder="0"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={s.col}>
-                <Text style={s.fieldLabel}>Lim. perda</Text>
+                <Text style={s.fieldLabel}>Lim. perda %</Text>
                 <TextInput
                   style={s.input}
                   value={editThreshold}
@@ -458,6 +535,9 @@ const s = StyleSheet.create({
     color: colors.text, borderWidth: 1, borderColor: colors.border,
   },
   fieldLabel: { fontSize: 11, fontWeight: '700', color: colors.textSub, textTransform: 'uppercase' },
+  fotoBtn: { padding: 12, backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center', marginBottom: 8 },
+  fotoBtnTxt: { color: colors.primary, fontWeight: '700' },
+  fotoPreview: { width: 100, height: 100, borderRadius: 8, marginBottom: 8 },
   chipRow:     { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   chip:        { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
   chipLarge:   { paddingHorizontal: 16, paddingVertical: 10, flex: 1, alignItems: 'center' },
@@ -486,6 +566,8 @@ const s = StyleSheet.create({
   desativarBtn: { fontSize: 12, color: colors.warning, fontWeight: '600' },
   reativarBtn:  { fontSize: 12, color: colors.success, fontWeight: '600' },
   excluirBtn:   { fontSize: 12, color: colors.danger,  fontWeight: '600' },
+  cargaBanner: { backgroundColor: '#FFF3CD', borderRadius: 8, padding: 8, marginVertical: 6, borderLeftWidth: 3, borderLeftColor: '#FFC107' },
+  cargaBannerTxt: { fontSize: 12, color: '#7D5400', fontWeight: '600' },
 
   // Modal edição
   overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
@@ -501,6 +583,18 @@ const s = StyleSheet.create({
   btnDesativarModalTxt: { fontSize: 13, fontWeight: '700', color: colors.warning },
   btnReativarModal:     { padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.success, marginTop: -4 },
   btnReativarModalTxt:  { fontSize: 13, fontWeight: '700', color: colors.success },
+
+  // Mínimo destaque
+  minimoZero:      { color: colors.warning, fontWeight: '700' },
+  minimoOk:        { color: colors.success, fontWeight: '600' },
+  minimoBox:       { borderRadius: 12, padding: 14, gap: 8, borderWidth: 2 },
+  minimoBoxAlerta: { backgroundColor: colors.warningLight, borderColor: colors.warning },
+  minimoBoxOk:     { backgroundColor: colors.successLight, borderColor: colors.success },
+  minimoBoxHeader: { gap: 2 },
+  minimoBoxLabel:  { fontSize: 13, fontWeight: '800', color: colors.text },
+  minimoBoxDica:   { fontSize: 11, color: colors.warning, fontWeight: '600' },
+  minimoInput:     { backgroundColor: colors.surface },
+  minimoHint:      { fontSize: 11, color: colors.textSub },
 
   // Banner revisão
   bannerRevisao: {

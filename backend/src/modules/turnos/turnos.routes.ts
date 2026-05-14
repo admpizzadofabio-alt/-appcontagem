@@ -16,6 +16,8 @@ import {
   postRascunho,
   getRascunhosPendentes,
   postDecidirRascunho,
+  getRevisoesPendentes,
+  postDecidirRevisao,
 } from './turnos.controller.js'
 
 export const turnosRouter = Router()
@@ -30,8 +32,10 @@ turnosRouter.delete('/:id', requireNivel(['Admin']), deleteTurno)
 turnosRouter.get('/historico', getHistorico)
 
 // Contagem
-turnosRouter.get('/contagem/:id/cega', getContagemCega)   // modo cego — omite quantidadeSistema
-turnosRouter.get('/contagem/:id', getContagem)             // resumo completo (após finalizar)
+turnosRouter.get('/contagem/:id/cega', getContagemCega)
+// VULN-009: resumo completo com quantidadeSistema permitido para Admin/Supervisor
+// OU para o operador que criou a contagem (necessário para resolver divergências).
+turnosRouter.get('/contagem/:id', getContagem)
 turnosRouter.post('/contagem/:id/item', postContagemItem)
 turnosRouter.post('/contagem/:id/foto', postContagemFoto)
 turnosRouter.post('/contagem/:id/finalizar', postContagemFinalizar)
@@ -46,3 +50,7 @@ turnosRouter.get('/dashboard', requireNivel(['Admin', 'Supervisor']), getDashboa
 // Rascunhos (Admin)
 turnosRouter.get('/rascunhos/pendentes', requireNivel(['Admin']), getRascunhosPendentes)
 turnosRouter.post('/rascunhos/:id/decidir', requireNivel(['Admin']), postDecidirRascunho)
+
+// Revisões pós-contagem (Admin/Supervisor)
+turnosRouter.get('/revisoes/pendentes', requireNivel(['Admin', 'Supervisor']), getRevisoesPendentes)
+turnosRouter.post('/revisoes/:id/decidir', requireNivel(['Admin', 'Supervisor']), postDecidirRevisao)

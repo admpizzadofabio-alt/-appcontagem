@@ -10,7 +10,7 @@ interface Props {
 
 const KEYS = [['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']]
 
-export function PinPad({ value, onChange, maxLength = 4 }: Props) {
+export function PinPad({ value, onChange, maxLength = 6 }: Props) {
   function handleKey(k: string) {
     if (k === '⌫') { onChange(value.slice(0, -1)); return }
     if (k === '' || value.length >= maxLength) return

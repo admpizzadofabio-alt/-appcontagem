@@ -31,6 +31,16 @@ export async function divergenciasHandler(req: Request, res: Response, next: Nex
 
 export async function auditoriaHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await service.auditoria())
+    const q = req.query as Record<string, string>
+    res.json(await service.auditoria({
+      take: q.take ? parseInt(q.take, 10) : undefined,
+      skip: q.skip ? parseInt(q.skip, 10) : undefined,
+      usuarioId: q.usuarioId,
+      acao: q.acao,
+      entidade: q.entidade,
+      dataInicio: q.dataInicio,
+      dataFim: q.dataFim,
+      busca: q.busca,
+    }))
   } catch (err) { next(err) }
 }

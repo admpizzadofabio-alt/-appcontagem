@@ -7,6 +7,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { SectionHeader } from '../../components/SectionHeader'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
+import { useRevisoesPendentesQuery } from '../../services/api/turnos'
+import { useListarPendentesQuery } from '../../services/api/movimentacoes'
 
 type Nav = NativeStackNavigationProp<AppStackParams>
 
@@ -16,12 +18,17 @@ interface MenuItem {
   sub: string
   onPress: () => void
   role?: 'Supervisor' | 'Admin'
+  badge?: number
 }
 
 export function MaisScreen() {
   const navigation = useNavigation<Nav>()
   const { usuario, signOut } = useAuth()
   const nivel = usuario?.nivelAcesso
+  const isSupervisor = nivel === 'Supervisor' || nivel === 'Admin'
+  const { data: revisoes = [] } = useRevisoesPendentesQuery(undefined, { skip: !isSupervisor })
+  const { data: pendentesAprov = [] } = useListarPendentesQuery(undefined, { skip: !isSupervisor })
+  const totalPendentes = revisoes.length + pendentesAprov.length
 
   function handleSignOut() {
     Alert.alert('Sair', 'Deseja encerrar a sessão?', [
@@ -59,6 +66,7 @@ export function MaisScreen() {
       sub: 'Gerenciar movimentações pendentes',
       onPress: () => navigation.navigate('Admin'),
       role: 'Supervisor',
+      badge: totalPendentes > 0 ? totalPendentes : undefined,
     },
     {
       icon: '👥',
@@ -79,6 +87,27 @@ export function MaisScreen() {
       label: 'Colibri POS',
       sub: 'Importar vendas e baixar estoque automaticamente',
       onPress: () => navigation.navigate('Colibri'),
+      role: 'Admin',
+    },
+    {
+      icon: '📊',
+      label: 'Analytics & Export',
+      sub: 'CMV, loss rate, vendas por hora, transferências e export CSV',
+      onPress: () => navigation.navigate('Analytics'),
+      role: 'Supervisor',
+    },
+    {
+      icon: '📋',
+      label: 'Logs de Auditoria',
+      sub: 'Filtrar e buscar nos logs do sistema',
+      onPress: () => navigation.navigate('Auditoria'),
+      role: 'Admin',
+    },
+    {
+      icon: '🔐',
+      label: 'Autenticação 2 Fatores',
+      sub: 'Adicionar código TOTP no login',
+      onPress: () => navigation.navigate('Setup2FA'),
       role: 'Admin',
     },
   ]
@@ -129,14 +158,21 @@ export function MaisScreen() {
   )
 }
 
-function MenuCard({ icon, label, sub, onPress }: MenuItem) {
+function MenuCard({ icon, label, sub, onPress, badge }: MenuItem) {
   return (
     <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.75}>
       <View style={s.cardIcon}>
         <Text style={s.cardIconText}>{icon}</Text>
       </View>
       <View style={s.cardBody}>
-        <Text style={s.cardLabel}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={s.cardLabel}>{label}</Text>
+          {badge !== undefined && badge > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeTxt}>{badge}</Text>
+            </View>
+          )}
+        </View>
         <Text style={s.cardSub}>{sub}</Text>
       </View>
       <Text style={s.chevron}>›</Text>
@@ -162,4 +198,6 @@ const s = StyleSheet.create({
   chevron: { fontSize: 22, color: colors.textMuted, fontWeight: '300' },
   signOutBtn: { marginTop: 8, padding: 16, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', borderWidth: 1, borderColor: colors.dangerLight },
   signOutText: { fontSize: 14, fontWeight: '600', color: colors.danger },
+  badge: { backgroundColor: colors.danger, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
 })

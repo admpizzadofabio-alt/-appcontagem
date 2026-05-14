@@ -14,6 +14,14 @@ export async function summaryHandler(req: Request, res: Response, next: NextFunc
   } catch (err) { next(err) }
 }
 
+export async function historicoHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { data, local } = req.query
+    if (!data || !local) return res.status(400).json({ message: 'data e local são obrigatórios' })
+    res.json(await service.historico(String(data), String(local)))
+  } catch (err) { next(err) }
+}
+
 export async function ajustarHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { quantidade } = ajustarEstoqueSchema.parse(req.body)

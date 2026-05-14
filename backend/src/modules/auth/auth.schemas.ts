@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const loginSchema = z.object({
-  pin: z.string().min(4, 'PIN deve ter no mínimo 4 dígitos').max(8),
+  pin: z.string().regex(/^\d{6}$/, 'PIN deve ter exatamente 6 dígitos'),
 })
 
 export const refreshSchema = z.object({

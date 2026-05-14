@@ -32,7 +32,11 @@ export function TransferenciaScreen() {
 
     try {
       await criar({ produtoId, quantidade: qtd, tipoMov: 'Transferencia', localOrigem: origem, localDestino: destino }).unwrap()
-      Alert.alert('Sucesso', `Transferência de ${qtd} ${selecionado?.unidadeMedida ?? ''} registrada!`, [{ text: 'OK', onPress: () => nav.goBack() }])
+      Alert.alert(
+        '📦 Transferência enviada',
+        `${qtd} ${selecionado?.unidadeMedida ?? ''} de ${origem} → ${destino}\n\nAguardando confirmação do ${destino}.`,
+        [{ text: 'OK', onPress: () => nav.goBack() }],
+      )
     } catch (e: any) {
       Alert.alert('Erro', e.message ?? 'Não foi possível transferir.')
     }

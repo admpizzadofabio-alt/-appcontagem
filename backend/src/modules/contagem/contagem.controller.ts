@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express'
+import { NotFoundError } from '../../shared/errors.js'
 import { iniciarContagemSchema, salvarItemSchema } from './contagem.schemas.js'
 import * as service from './contagem.service.js'
 
 export async function listarHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await service.listar(req.query.local as string))
+    const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
+    const operadorId = isPrivileged ? undefined : req.user!.sub
+    res.json(await service.listar(req.query.local as string, operadorId))
   } catch (err) { next(err) }
 }
 
@@ -17,8 +20,12 @@ export async function iniciarHandler(req: Request, res: Response, next: NextFunc
 
 export async function buscarHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const revelar = req.query.revelar === 'true' && ['Supervisor', 'Admin'].includes(req.user!.nivelAcesso)
-    res.json(await service.buscar(String(req.params.id), revelar))
+    const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
+    const revelar = req.query.revelar === 'true' && isPrivileged
+    const contagem = await service.buscar(String(req.params.id), revelar)
+    if (!isPrivileged && contagem.operadorId !== req.user!.sub)
+      throw new NotFoundError('Contagem não encontrada')
+    res.json(contagem)
   } catch (err) { next(err) }
 }
 

@@ -1,14 +1,16 @@
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import argon2 from 'argon2'
+
+const ARGON2_OPTIONS = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 }
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log('🌱 Iniciando seed...')
 
-  const hash1234 = await bcrypt.hash('1234', 12)
-  const hash1111 = await bcrypt.hash('1111', 12)
-  const hash2222 = await bcrypt.hash('2222', 12)
+  const hashAdmin = await argon2.hash('123456', ARGON2_OPTIONS)
+  const hashBar = await argon2.hash('111111', ARGON2_OPTIONS)
+  const hashDelivery = await argon2.hash('222222', ARGON2_OPTIONS)
 
   // upsert.update vazio: se o usuário já existir, NÃO sobrescreve o PIN.
   // O PIN só é setado na criação inicial. Re-rodar o seed é seguro pra PINs alterados.
@@ -18,8 +20,8 @@ async function main() {
     create: {
       id: 'admin-master',
       nome: 'Admin Master',
-      pin: hash1234,
-      pinFormat: 'bcrypt',
+      pin: hashAdmin,
+      pinFormat: 'argon2id',
       setor: 'Admin',
       nivelAcesso: 'Admin',
       ativo: true,
@@ -32,8 +34,8 @@ async function main() {
     create: {
       id: 'operador-bar',
       nome: 'Operador Bar',
-      pin: hash1111,
-      pinFormat: 'bcrypt',
+      pin: hashBar,
+      pinFormat: 'argon2id',
       setor: 'Bar',
       nivelAcesso: 'Operador',
       ativo: true,
@@ -46,31 +48,18 @@ async function main() {
     create: {
       id: 'operador-delivery',
       nome: 'Operador Delivery',
-      pin: hash2222,
-      pinFormat: 'bcrypt',
+      pin: hashDelivery,
+      pinFormat: 'argon2id',
       setor: 'Delivery',
       nivelAcesso: 'Operador',
       ativo: true,
     },
   })
 
-  // Produtos de exemplo
-  const produtos = [
-    { nomeBebida: 'Heineken Long Neck', categoria: 'Cerveja', unidadeMedida: 'Un', volumePadrao: '330ml', custoUnitario: 5.50, estoqueMinimo: 24, setorPadrao: 'Bar' },
-    { nomeBebida: 'Budweiser Long Neck', categoria: 'Cerveja', unidadeMedida: 'Un', volumePadrao: '330ml', custoUnitario: 4.80, estoqueMinimo: 24, setorPadrao: 'Bar' },
-    { nomeBebida: 'Água Mineral 500ml', categoria: 'Água', unidadeMedida: 'Un', volumePadrao: '500ml', custoUnitario: 1.20, estoqueMinimo: 48, setorPadrao: 'Todos' },
-    { nomeBebida: 'Coca-Cola Lata 350ml', categoria: 'Refrigerante', unidadeMedida: 'Un', volumePadrao: '350ml', custoUnitario: 3.00, estoqueMinimo: 36, setorPadrao: 'Todos' },
-    { nomeBebida: 'Suco de Laranja 1L', categoria: 'Suco', unidadeMedida: 'Un', volumePadrao: '1L', custoUnitario: 6.00, estoqueMinimo: 12, setorPadrao: 'Delivery' },
-  ]
-
-  for (const p of produtos) {
-    await prisma.produto.create({ data: p }).catch(() => {})
-  }
-
   console.log(`✅ Seed concluído!`)
-  console.log(`   Admin: PIN 1234`)
-  console.log(`   Bar:   PIN 1111`)
-  console.log(`   Delivery: PIN 2222`)
+  console.log(`   Admin:    PIN 123456`)
+  console.log(`   Bar:      PIN 111111`)
+  console.log(`   Delivery: PIN 222222`)
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())

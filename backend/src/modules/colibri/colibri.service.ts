@@ -1,5 +1,7 @@
 import { prisma } from '../../config/prisma.js'
+import { env } from '../../config/env.js'
 import { NotFoundError } from '../../shared/errors.js'
+import { formatLocalDate, localOntem, parseLocalDate } from '../../shared/dateLocal.js'
 import {
   fetchVendas,
   fetchCatalogo,
@@ -19,6 +21,7 @@ export type ImportarVendasResult = {
   status: 'ok' | 'parcial' | 'aguardando' | 'em_andamento' | 'sem_periodo'
   dataInicio?: string
   dataFim?: string
+  produtosAtualizados?: Array<{ nome: string; quantidade: number; local: string }>
 }
 
 export async function listarMapeamentos() {
@@ -86,6 +89,20 @@ export async function importarVendas(params: {
       aviso: 'Já existe uma importação em andamento. Aguarde alguns segundos.',
     }
   }
+  // Advisory lock Postgres: cross-process (cluster PM2) garante 1 import por vez.
+  // Key fixa derivada de hashtext('colibri-import') — qualquer worker que tente lockar
+  // ao mesmo tempo recebe false e desiste.
+  const COLIBRI_LOCK_KEY = 7341234567 // valor arbitrário fixo
+  const lockResult = await prisma.$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
+    SELECT pg_try_advisory_lock(${COLIBRI_LOCK_KEY}::bigint) as pg_try_advisory_lock
+  `
+  if (!lockResult[0]?.pg_try_advisory_lock) {
+    return {
+      totalVendas: 0, totalImportados: 0, totalIgnorados: 0, erros: [],
+      status: 'em_andamento',
+      aviso: 'Outro worker está executando import. Aguarde.',
+    }
+  }
   importacaoEmAndamento = true
 
   try {
@@ -103,9 +120,19 @@ export async function importarVendas(params: {
           }
         }
       } catch (e: any) {
-        // status-periodo opcional: se a integração rejeitar/timeout, seguimos com import.
-        // (Loga via erros pra rastreabilidade.)
-        console.warn('verificarStatusPeriodo falhou, prosseguindo:', e?.message)
+        // status-periodo falhou: 404 (endpoint não existe) seguimos.
+        // Outros erros (timeout/5xx): seguro retornar aguardando — não importar com dado parcial.
+        const status = e?.message?.match(/\((\d+)\)/)?.[1]
+        if (status && status !== '404' && status !== '405') {
+          return {
+            totalVendas: 0, totalImportados: 0, totalIgnorados: 0, erros: [`status-periodo falhou: ${e.message}`],
+            status: 'aguardando',
+            aviso: 'Não foi possível confirmar com Colibri se o período está fechado. Tente novamente.',
+            dataInicio: params.dataInicio,
+            dataFim: params.dataFim,
+          }
+        }
+        console.warn('verificarStatusPeriodo retornou 404/405 (endpoint indisponível), prosseguindo:', e?.message)
       }
     }
 
@@ -125,60 +152,61 @@ export async function importarVendas(params: {
 
     const vendas = await fetchVendas(params.dataInicio, params.dataFim)
 
-    // Agrupa quantidades por produtoId usando resultado já agregado do fetchVendas
-    const totaisPorProduto = new Map<string, { quantidade: number; produtoId: string }>()
+    // Carrega marcoInicialEm dos produtos mapeados — Colibri só conta vendas a partir do marco
+    const produtosMarco = await prisma.produto.findMany({
+      where: { id: { in: mapeamentos.map((m) => m.produtoId) } },
+      select: { id: true, marcoInicialEm: true, setorPadrao: true },
+    })
+    const marcoPorProduto = new Map(produtosMarco.map((p) => [p.id, p.marcoInicialEm]))
+    const setorPorProduto = new Map(produtosMarco.map((p) => [p.id, p.setorPadrao]))
+
     const erros: string[] = []
     let ignorados = 0
+    let semMarco = 0
+    let antesDoMarco = 0
+    let dedupSkip = 0
 
-    for (const venda of vendas) {
+    // Pré-filtro de marco (não depende do banco) — reduz vendas antes da transação
+    const vendasAposMarco = vendas.filter((venda) => {
       const mapeamento = mapaCode.get(venda.productCode.toLowerCase())
-      if (!mapeamento) {
-        ignorados++
-        continue
-      }
-      const key = mapeamento.produtoId
-      const qtd = venda.quantitySold * mapeamento.fatorConv
-      const atual = totaisPorProduto.get(key)
-      if (atual) {
-        atual.quantidade += qtd
-      } else {
-        totaisPorProduto.set(key, { quantidade: qtd, produtoId: mapeamento.produtoId })
-      }
-    }
+      if (!mapeamento) { ignorados++; return false }
+      const marco = marcoPorProduto.get(mapeamento.produtoId)
+      if (!marco) { semMarco++; return false }
+      const dataVenda = venda.timestamp ?? parseLocalDate(params.dataFim, '23:59:59')
+      if (dataVenda < marco) { antesDoMarco++; return false }
+      return true
+    })
 
     let importados = 0
+    const produtosAtualizados: Array<{ nome: string; quantidade: number; local: string }> = []
     const substituir = params.substituir !== false
 
     await prisma.$transaction(async (tx) => {
-      // Modo idempotente: remove Saídas Colibri anteriores no MESMO período
-      // (qualquer combinação de dataInicio:dataFim que se sobreponha) e estorna o estoque.
-      // Isso permite re-importar (ex.: cron 12:00 e 16:00 cobrindo o mesmo dia) sem duplicar.
+      // Modo idempotente: remove Saídas Colibri anteriores com MESMO refOrigem
       if (substituir) {
         const refLike = `colibri:${params.dataInicio}:${params.dataFim}`
         const movsAntigos = await tx.movimentacaoEstoque.findMany({
           where: {
             tipoMov: 'Saida',
             referenciaOrigem: refLike,
-            localOrigem: params.local,
           },
         })
 
-        // Estorna estoque dos movimentos antigos
-        const estornoPorProduto = new Map<string, number>()
+        // Estorna estoque dos movimentos antigos (agrupado por produtoId+local)
+        const estornoPorChave = new Map<string, { produtoId: string; local: string; qtd: number }>()
         for (const m of movsAntigos) {
-          estornoPorProduto.set(m.produtoId, (estornoPorProduto.get(m.produtoId) ?? 0) + m.quantidade)
+          const chave = `${m.produtoId}:${m.localOrigem}`
+          const atual = estornoPorChave.get(chave)
+          if (atual) { atual.qtd += m.quantidade } else {
+            estornoPorChave.set(chave, { produtoId: m.produtoId, local: m.localOrigem ?? 'Bar', qtd: m.quantidade })
+          }
         }
-        for (const [produtoId, qtdEstornar] of estornoPorProduto) {
-          const ea = await tx.estoqueAtual.findUnique({
-            where: { produtoId_local: { produtoId, local: params.local } },
-          })
+        for (const { produtoId, local, qtd } of estornoPorChave.values()) {
+          const ea = await tx.estoqueAtual.findUnique({ where: { produtoId_local: { produtoId, local } } })
           if (ea) {
             await tx.estoqueAtual.update({
-              where: { produtoId_local: { produtoId, local: params.local } },
-              data: {
-                quantidadeAtual: ea.quantidadeAtual + qtdEstornar,
-                atualizadoPor: params.usuarioId,
-              },
+              where: { produtoId_local: { produtoId, local } },
+              data: { quantidadeAtual: ea.quantidadeAtual + qtd, atualizadoPor: params.usuarioId },
             })
           }
         }
@@ -187,6 +215,54 @@ export async function importarVendas(params: {
         if (movsAntigos.length > 0) {
           await tx.movimentacaoEstoque.deleteMany({
             where: { id: { in: movsAntigos.map((m) => m.id) } },
+          })
+        }
+      }
+
+      // DEDUP — carrega idItemVendas já processados em qualquer movimento Colibri restante.
+      // Evita duplicação quando 2 imports cobrem ranges diferentes que tocam a mesma venda
+      // (ex.: cron usa "ontem→hoje", manual usou "hoje→hoje").
+      const movsRestantes = await tx.movimentacaoEstoque.findMany({
+        where: {
+          tipoMov: 'Saida',
+          referenciaOrigem: { startsWith: 'colibri:' },
+          idItemVendasColibri: { not: null },
+        },
+        select: { idItemVendasColibri: true },
+      })
+      const idsProcessados = new Set<string>()
+      for (const m of movsRestantes) {
+        if (!m.idItemVendasColibri) continue
+        try {
+          const arr: string[] = JSON.parse(m.idItemVendasColibri)
+          for (const id of arr) idsProcessados.add(id)
+        } catch {}
+      }
+
+      // Agrega vendas após dedup e marco, mantendo lista de idItemVendas por produto
+      const totaisPorProduto = new Map<string, {
+        quantidade: number; produtoId: string; local: string; ids: string[]
+      }>()
+      for (const venda of vendasAposMarco) {
+        if (venda.idItemVenda && idsProcessados.has(venda.idItemVenda)) {
+          dedupSkip++
+          continue
+        }
+        const mapeamento = mapaCode.get(venda.productCode.toLowerCase())!
+        const key = mapeamento.produtoId
+        const qtd = venda.quantitySold * mapeamento.fatorConv
+        const setor = setorPorProduto.get(mapeamento.produtoId) ?? 'Bar'
+        const localProduto = setor === 'Delivery' ? 'Delivery' : 'Bar'
+        const atual = totaisPorProduto.get(key)
+        if (atual) {
+          atual.quantidade += qtd
+          if (venda.idItemVenda) atual.ids.push(venda.idItemVenda)
+        } else {
+          totaisPorProduto.set(key, {
+            quantidade: qtd,
+            produtoId: mapeamento.produtoId,
+            local: localProduto,
+            ids: venda.idItemVenda ? [venda.idItemVenda] : [],
           })
         }
       }
@@ -206,22 +282,23 @@ export async function importarVendas(params: {
               produtoId,
               tipoMov: 'Saida',
               quantidade: Math.round(info.quantidade * 100) / 100,
-              localOrigem: params.local,
+              localOrigem: info.local,
               usuarioId: params.usuarioId,
               observacao: obs,
               referenciaOrigem: `colibri:${params.dataInicio}:${params.dataFim}`,
               aprovacaoStatus: 'Aprovado',
+              idItemVendasColibri: info.ids.length > 0 ? JSON.stringify(info.ids) : null,
             },
           })
 
           const qtdDecrement = Math.round(info.quantidade * 100) / 100
           const estoqueAtual = await tx.estoqueAtual.findUnique({
-            where: { produtoId_local: { produtoId, local: params.local } },
+            where: { produtoId_local: { produtoId, local: info.local } },
           })
           const novaQtd = Math.max(0, (estoqueAtual?.quantidadeAtual ?? 0) - qtdDecrement)
           await tx.estoqueAtual.upsert({
-            where: { produtoId_local: { produtoId, local: params.local } },
-            create: { produtoId, local: params.local, quantidadeAtual: 0, atualizadoPor: params.usuarioId },
+            where: { produtoId_local: { produtoId, local: info.local } },
+            create: { produtoId, local: info.local, quantidadeAtual: 0, atualizadoPor: params.usuarioId },
             update: { quantidadeAtual: novaQtd, atualizadoPor: params.usuarioId },
           })
 
@@ -242,6 +319,11 @@ export async function importarVendas(params: {
           })
 
           importados++
+          produtosAtualizados.push({
+            nome: produto.nomeBebida,
+            quantidade: Math.round(info.quantidade * 100) / 100,
+            local: info.local,
+          })
         } catch (e: any) {
           erros.push(`Produto ${produtoId}: ${e.message}`)
         }
@@ -255,7 +337,7 @@ export async function importarVendas(params: {
           usuarioNome: params.usuarioNome,
           totalVendas: vendas.length,
           totalImportados: importados,
-          totalIgnorados: ignorados,
+          totalIgnorados: ignorados + semMarco + antesDoMarco + dedupSkip,
           status: erros.length > 0 ? 'parcial' : 'ok',
           erros: erros.length > 0 ? JSON.stringify(erros) : null,
         },
@@ -265,14 +347,17 @@ export async function importarVendas(params: {
     return {
       totalVendas: vendas.length,
       totalImportados: importados,
-      totalIgnorados: ignorados,
+      totalIgnorados: ignorados + semMarco + antesDoMarco + dedupSkip,
       erros,
       status: erros.length > 0 ? 'parcial' : 'ok',
       dataInicio: params.dataInicio,
       dataFim: params.dataFim,
+      produtosAtualizados,
     }
   } finally {
     importacaoEmAndamento = false
+    // Libera advisory lock para outros workers (PM2 cluster)
+    await prisma.$queryRaw`SELECT pg_advisory_unlock(${7341234567}::bigint)`.catch(() => {})
   }
 }
 
@@ -295,29 +380,21 @@ export async function importarPendente(params: {
     orderBy: { dataFim: 'desc' },
   })
 
-  const hoje = new Date()
-  const hojeStr = hoje.toISOString().slice(0, 10)
+  // Usa timezone local Brasília — toISOString seria UTC e quebra após 21h BRT.
+  const hojeStr = formatLocalDate()
+  const ontemStr = localOntem()
 
   let dataInicio: string
   let dataFim: string = hojeStr
 
   if (!ultima) {
-    // Nunca importou: começa pelo dia anterior
-    const ontem = new Date(hoje)
-    ontem.setDate(ontem.getDate() - 1)
-    dataInicio = ontem.toISOString().slice(0, 10)
-    dataFim = ontem.toISOString().slice(0, 10)
+    // Nunca importou: começa pelo dia anterior (já fechado, dados completos no Colibri)
+    dataInicio = ontemStr
+    dataFim = ontemStr
   } else {
-    const ultimoFim = ultima.dataFim.toISOString().slice(0, 10)
-    if (ultimoFim < hojeStr) {
-      // Última importação cobre dias anteriores: importa do dia seguinte até hoje
-      const proximoDia = new Date(ultima.dataFim)
-      proximoDia.setDate(proximoDia.getDate() + 1)
-      dataInicio = proximoDia.toISOString().slice(0, 10)
-    } else {
-      // Última importação já cobre hoje: re-importa hoje (substitui)
-      dataInicio = hojeStr
-    }
+    // Sempre cobre últimos 2 dias — captura vendas tardias do dia anterior
+    // (noite após 16h cron, backend offline, etc) sem duplicar (substituir:true).
+    dataInicio = ontemStr
   }
 
   if (dataInicio > dataFim) {
@@ -338,7 +415,7 @@ export async function importarPendente(params: {
 }
 
 export async function getUltimaImportacao() {
-  return prisma.colibriImportacao.findFirst({
+  const ultima = await prisma.colibriImportacao.findFirst({
     orderBy: { importadoEm: 'desc' },
     select: {
       id: true,
@@ -351,6 +428,47 @@ export async function getUltimaImportacao() {
       totalIgnorados: true,
       status: true,
     },
+  })
+  if (!ultima) return null
+
+  const horasDesde = Math.floor((Date.now() - ultima.importadoEm.getTime()) / (1000 * 60 * 60))
+  // Stale = mais de 6h sem importar (último cron deveria ter rodado entre 04-16h)
+  const stale = horasDesde > 6
+  return { ...ultima, stale, horasDesde }
+}
+
+/**
+ * Recuperação automática no startup: se última importação tem >6h, importa
+ * janela maior (últimos 7 dias) para fechar gap após backend ficar offline.
+ */
+export async function recuperarColibriStartup() {
+  if (!env.COLIBRI_CLIENT_ID) return
+  const ultima = await prisma.colibriImportacao.findFirst({
+    where: { status: { in: ['ok', 'parcial'] } },
+    orderBy: { dataFim: 'desc' },
+  })
+  if (!ultima) return // nunca importou — deixa o cron normal cuidar
+
+  const horasDesde = (Date.now() - ultima.importadoEm.getTime()) / (1000 * 60 * 60)
+  if (horasDesde < 6) return // recente, nada a recuperar
+
+  const usuarioSistema = await prisma.usuario.findFirst({
+    where: { nivelAcesso: 'Admin', ativo: true },
+    orderBy: { criadoEm: 'asc' },
+  })
+  if (!usuarioSistema) return
+
+  // Janela: últimos 7 dias até hoje (timezone local Brasília)
+  const seteDiasAtras = new Date()
+  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7)
+
+  return importarVendas({
+    dataInicio: formatLocalDate(seteDiasAtras),
+    dataFim: formatLocalDate(),
+    local: 'Bar',
+    usuarioId: usuarioSistema.id,
+    usuarioNome: `${usuarioSistema.nome} (recuperação startup, ${Math.floor(horasDesde)}h sem cron)`,
+    substituir: true,
   })
 }
 
@@ -370,14 +488,16 @@ export async function sincronizarCatalogo() {
   for (const p of produtos) {
     const existe = await prisma.colibriCatalogo.findUnique({ where: { colibriCode: p.codigo } })
     if (existe) {
+      // Não altera `visto` — item já foi visto pelo usuário anteriormente
       await prisma.colibriCatalogo.update({
         where: { colibriCode: p.codigo },
         data: { colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, sincronizadoEm: new Date() },
       })
       atualizados++
     } else {
+      // Item novo: visto = false → aparece no badge até o usuário abrir a aba
       await prisma.colibriCatalogo.create({
-        data: { colibriCode: p.codigo, colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo },
+        data: { colibriCode: p.codigo, colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, visto: false },
       })
       novos++
     }
@@ -405,13 +525,31 @@ export async function listarCatalogo() {
   })
 }
 
+export async function contarNovosColibri() {
+  // Só conta itens que o usuário ainda não viu (visto = false) E que não foram importados
+  const [naoVistos, mapeamentos] = await Promise.all([
+    prisma.colibriCatalogo.findMany({
+      where: { visto: false },
+      select: { colibriCode: true, colibriNome: true, grupo: true },
+    }),
+    prisma.colibriProduto.findMany({ select: { colibriCode: true } }),
+  ])
+  const mapeados = new Set(mapeamentos.map((m) => m.colibriCode.toLowerCase()))
+  const novos = naoVistos.filter((c) => !mapeados.has(c.colibriCode.toLowerCase()))
+  return { count: novos.length, itens: novos.slice(0, 20) }
+}
+
+export async function marcarCatalogoVisto() {
+  await prisma.colibriCatalogo.updateMany({ where: { visto: false }, data: { visto: true } })
+}
+
 export async function removerCatalogo(id: string) {
   const item = await prisma.colibriCatalogo.findUnique({ where: { id } })
   if (!item) throw new NotFoundError('Item de catálogo não encontrado')
   await prisma.colibriCatalogo.delete({ where: { id } })
 }
 
-export async function importarProdutosDoColibri() {
+export async function importarProdutosDoColibri(colibriCodes?: string[]) {
   // Busca catálogo atualizado direto da API do Colibri
   const produtos = await fetchCatalogo()
 
@@ -425,7 +563,16 @@ export async function importarProdutosDoColibri() {
   })
   const codesExistentes = new Set(mapeamentosExistentes.map((m) => m.colibriCode.toLowerCase()))
 
-  const novos = produtos.filter((p) => !codesExistentes.has(p.codigo.toLowerCase()))
+  // Se vieram códigos selecionados, filtra apenas esses; senão importa todos os não mapeados
+  const selecionados = colibriCodes && colibriCodes.length > 0
+    ? new Set(colibriCodes.map((c) => c.toLowerCase()))
+    : null
+
+  const novos = produtos.filter((p) => {
+    if (codesExistentes.has(p.codigo.toLowerCase())) return false
+    if (selecionados) return selecionados.has(p.codigo.toLowerCase())
+    return true
+  })
   const detalhes: string[] = []
   let criados = 0
 

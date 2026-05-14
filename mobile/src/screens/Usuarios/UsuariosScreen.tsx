@@ -47,7 +47,7 @@ export function UsuariosScreen() {
   }
 
   async function handleCriar() {
-    if (!nome.trim() || pin.length < 4) return Alert.alert('Atenção', 'Preencha nome e PIN de 4 dígitos.')
+    if (!nome.trim() || !/^\d{6}$/.test(pin)) return Alert.alert('Atenção', 'Preencha nome e PIN de 6 dígitos.')
     try {
       await criar({ nome, pin, setor, nivelAcesso: nivel }).unwrap()
       setNome(''); setPin(''); setShowForm(false)
@@ -57,7 +57,7 @@ export function UsuariosScreen() {
 
   async function handleAtualizar() {
     if (!editNome.trim()) return Alert.alert('Atenção', 'Nome não pode ficar vazio.')
-    if (editPin && editPin.length < 4) return Alert.alert('Atenção', 'PIN deve ter 4 dígitos.')
+    if (editPin && !/^\d{6}$/.test(editPin)) return Alert.alert('Atenção', 'PIN deve ter exatamente 6 dígitos.')
     try {
       await atualizar({
         id: editandoId!,
@@ -81,7 +81,7 @@ export function UsuariosScreen() {
           <Card style={s.form}>
             <Text style={s.formTitle}>Criar Usuário</Text>
             <TextInput style={s.input} placeholder="Nome *" placeholderTextColor={colors.textMuted} value={nome} onChangeText={setNome} />
-            <TextInput style={s.input} placeholder="PIN (4 dígitos) *" placeholderTextColor={colors.textMuted} keyboardType="number-pad" maxLength={4} secureTextEntry value={pin} onChangeText={setPin} />
+            <TextInput style={s.input} placeholder="PIN (6 dígitos) *" placeholderTextColor={colors.textMuted} keyboardType="number-pad" maxLength={6} secureTextEntry value={pin} onChangeText={setPin} />
 
             <Text style={s.fieldLabel}>Setor</Text>
             <View style={s.opts}>
@@ -150,10 +150,10 @@ export function UsuariosScreen() {
                     style={s.input}
                     value={editPin}
                     onChangeText={setEditPin}
-                    placeholder="Novo PIN (4 dígitos)"
+                    placeholder="Novo PIN (6 dígitos)"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
-                    maxLength={4}
+                    maxLength={6}
                     secureTextEntry
                   />
 

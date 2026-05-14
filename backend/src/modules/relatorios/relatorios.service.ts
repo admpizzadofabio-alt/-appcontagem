@@ -83,9 +83,36 @@ export async function divergencias(dataInicio?: string, dataFim?: string) {
   })
 }
 
-export async function auditoria(take = 200) {
-  return prisma.logAuditoria.findMany({
-    orderBy: { dataEvento: 'desc' },
-    take,
-  })
+export async function auditoria(filtros: {
+  take?: number; skip?: number
+  usuarioId?: string; acao?: string; entidade?: string
+  dataInicio?: string; dataFim?: string; busca?: string
+} = {}) {
+  const where: any = {}
+  if (filtros.usuarioId) where.usuarioId = filtros.usuarioId
+  if (filtros.acao) where.acao = { contains: filtros.acao, mode: 'insensitive' }
+  if (filtros.entidade) where.entidade = filtros.entidade
+  if (filtros.dataInicio || filtros.dataFim) {
+    where.dataEvento = {}
+    if (filtros.dataInicio) where.dataEvento.gte = new Date(filtros.dataInicio + 'T00:00:00-03:00')
+    if (filtros.dataFim) where.dataEvento.lte = new Date(filtros.dataFim + 'T23:59:59-03:00')
+  }
+  if (filtros.busca) {
+    where.OR = [
+      { usuarioNome: { contains: filtros.busca, mode: 'insensitive' } },
+      { detalhes: { contains: filtros.busca, mode: 'insensitive' } },
+      { idReferencia: { equals: filtros.busca } },
+    ]
+  }
+
+  const [total, items] = await Promise.all([
+    prisma.logAuditoria.count({ where }),
+    prisma.logAuditoria.findMany({
+      where,
+      orderBy: { dataEvento: 'desc' },
+      take: filtros.take ?? 200,
+      skip: filtros.skip ?? 0,
+    }),
+  ])
+  return { total, items, take: filtros.take ?? 200, skip: filtros.skip ?? 0 }
 }

@@ -4,8 +4,10 @@ import { env } from './config/env.js'
 import { logger } from './config/logger.js'
 import { prisma } from './config/prisma.js'
 import { iniciarJobs } from './shared/jobs.js'
+import { initSentry } from './config/sentry.js'
 
 async function main() {
+  initSentry()
   await prisma.$connect()
   logger.info('Banco de dados conectado')
 

@@ -21,7 +21,8 @@ export function BotaoColibriCarregar({ compact = false }: Props) {
   const { data: ultima, refetch } = useUltimaImportacaoQuery()
   const [importar, { isLoading }] = useImportarPendenteMutation()
 
-  const desatualizada = ultima ? horasDesde(ultima.importadoEm) >= 12 : true
+  // Backend marca stale=true se >6h. Fallback local para 12h se backend não retornar.
+  const desatualizada = ultima ? (ultima.stale ?? horasDesde(ultima.importadoEm) >= 12) : true
 
   async function carregar() {
     try {
@@ -42,12 +43,16 @@ export function BotaoColibriCarregar({ compact = false }: Props) {
       }
 
       const periodo = r.dataInicio === r.dataFim ? r.dataInicio : `${r.dataInicio} a ${r.dataFim}`
+      const listaProds = (r.produtosAtualizados ?? [])
+        .map((p) => `   • ${p.nome}: -${p.quantidade} (${p.local})`)
+        .join('\n')
       Alert.alert(
         'Importação concluída',
         `Período: ${periodo}\n\n` +
-          `✓ ${r.totalImportados} produto(s) atualizado(s)\n` +
-          `📦 ${r.totalVendas} venda(s) processada(s)\n` +
-          (r.totalIgnorados > 0 ? `⚠️ ${r.totalIgnorados} ignorada(s) (sem mapeamento)\n` : '') +
+          `✓ ${r.totalImportados} produto(s) atualizado(s)` +
+          (listaProds ? `:\n${listaProds}\n` : '\n') +
+          `\n📦 ${r.totalVendas} venda(s) processada(s)\n` +
+          (r.totalIgnorados > 0 ? `⚠️ ${r.totalIgnorados} ignorada(s) (sem mapeamento ou já importadas)\n` : '') +
           (r.erros.length > 0 ? `\n❌ ${r.erros.length} erro(s)` : ''),
       )
     } catch (e: any) {
@@ -72,7 +77,9 @@ export function BotaoColibriCarregar({ compact = false }: Props) {
             <Text style={s.sub}>Nunca importado</Text>
           )}
           {desatualizada && ultima && (
-            <Text style={s.alerta}>⚠️ Última importação há mais de 12h</Text>
+            <Text style={s.alerta}>
+              ⚠️ Sem atualizar há {ultima.horasDesde ?? horasDesde(ultima.importadoEm)}h — toque em Carregar
+            </Text>
           )}
         </View>
       </View>

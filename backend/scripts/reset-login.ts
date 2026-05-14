@@ -21,4 +21,4 @@ for (const u of usuarios) {
 }
 
 await prisma.$disconnect()
-console.log('\nPronto. PINs do seed: Admin=1234, Bar=1111, Delivery=2222')
+console.log('\nPronto. PINs do seed: Admin=123456, Bar=111111, Delivery=222222')

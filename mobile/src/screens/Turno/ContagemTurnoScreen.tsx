@@ -27,7 +27,8 @@ const BG_CORES: Record<string, string> = {
 export function ContagemTurnoScreen() {
   const navigation = useNavigation<Nav>()
   const route      = useRoute<RouteT>()
-  const contagemId = route.params.contagemId
+  const contagemId      = route.params.contagemId
+  const colibriPendente = route.params.colibriPendente ?? false
   const { usuario } = useAuth()
 
   const { data: contagem, isLoading, refetch } = useContagemCegaQuery(contagemId)
@@ -243,6 +244,15 @@ export function ContagemTurnoScreen() {
         </View>
       </View>
 
+      {/* ── Banner Colibri pendente ── */}
+      {colibriPendente && (
+        <View style={s.colibriAviso}>
+          <Text style={s.colibriAvisoTxt}>
+            Vendas do Colibri ainda nao foram carregadas. O Esperado pode estar acima do real. Justifique divergencias como "Colibri fora do ar".
+          </Text>
+        </View>
+      )}
+
       {/* ── Lista ── */}
       <FlatList
         data={itens}
@@ -310,6 +320,8 @@ const s = StyleSheet.create({
   // Lista
   list: { paddingBottom: 40 },
   separator: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 90 },
+  colibriAviso: { backgroundColor: '#FFF3CD', borderLeftWidth: 4, borderLeftColor: '#F59E0B', marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 6 },
+  colibriAvisoTxt: { color: '#92400E', fontSize: 13, lineHeight: 18 },
 
   // Cada linha
   row: {

@@ -13,6 +13,8 @@ import {
   removerCatalogo,
   testConexao,
   importarProdutosDoColibri,
+  contarNovosColibri,
+  marcarCatalogoVisto,
 } from './colibri.service.js'
 import { criarMapeamentoSchema, atualizarMapeamentoSchema, importarVendasSchema } from './colibri.schemas.js'
 
@@ -90,9 +92,10 @@ export async function deleteCatalogoItem(req: Request, res: Response, next: Next
   } catch (e) { next(e) }
 }
 
-export async function postImportarProdutos(_req: Request, res: Response, next: NextFunction) {
+export async function postImportarProdutos(req: Request, res: Response, next: NextFunction) {
   try {
-    const resultado = await importarProdutosDoColibri()
+    const colibriCodes = Array.isArray(req.body?.colibriCodes) ? req.body.colibriCodes as string[] : undefined
+    const resultado = await importarProdutosDoColibri(colibriCodes)
     res.status(201).json(resultado)
   } catch (e) { next(e) }
 }
@@ -115,5 +118,18 @@ export async function postImportarPendente(req: Request, res: Response, next: Ne
 export async function getUltimaImportacaoCtrl(_req: Request, res: Response, next: NextFunction) {
   try {
     res.json(await getUltimaImportacao())
+  } catch (e) { next(e) }
+}
+
+export async function getNovosColibri(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await contarNovosColibri())
+  } catch (e) { next(e) }
+}
+
+export async function patchMarcarVisto(_req: Request, res: Response, next: NextFunction) {
+  try {
+    await marcarCatalogoVisto()
+    res.json({ ok: true })
   } catch (e) { next(e) }
 }

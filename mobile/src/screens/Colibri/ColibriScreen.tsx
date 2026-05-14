@@ -4,6 +4,7 @@ import {
   TextInput, Alert, ActivityIndicator, Modal, Pressable, ViewStyle,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useEffect } from 'react'
 import {
   useColibriStatusQuery,
   useListarMapeamentosQuery,
@@ -15,6 +16,7 @@ import {
   useSincronizarCatalogoMutation,
   useRemoverCatalogoItemMutation,
   useImportarProdutosColibriMutation,
+  useMarcarColibriVistoMutation,
   type ColibriCatalogoItem,
 } from '../../services/api/colibri'
 import { useListarProdutosQuery } from '../../services/api/produtos'
@@ -72,30 +74,66 @@ export function ColibriScreen() {
 }
 
 // ──────────────────────────────
-// Aba Importar Produtos
+// Aba Importar Produtos — Checklist
 // ──────────────────────────────
 function AbaProdutos() {
-  const [importar, { isLoading }] = useImportarProdutosColibriMutation()
-  const [resultado, setResultado] = useState<{
-    total: number; criados: number; ignorados: number; detalhes: string[]
-  } | null>(null)
+  const { data: catalogo = [], isLoading: carregando } = useListarCatalogoQuery()
+  const [sincronizar, { isLoading: sincronizando }] = useSincronizarCatalogoMutation()
+  const [importar, { isLoading: importando }] = useImportarProdutosColibriMutation()
+  const [marcarVisto] = useMarcarColibriVistoMutation()
+
+  // Ao abrir esta aba, marca todos os itens não vistos como vistos → limpa o badge
+  useEffect(() => { marcarVisto() }, [])
+
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+
+  const disponiveis = catalogo.filter((i) => !i.mapeado)
+  const todosMarcados = disponiveis.length > 0 && selecionados.size === disponiveis.length
+
+  function toggleItem(code: string) {
+    setSelecionados((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
+  function toggleTodos() {
+    if (todosMarcados) {
+      setSelecionados(new Set())
+    } else {
+      setSelecionados(new Set(disponiveis.map((i) => i.colibriCode)))
+    }
+  }
+
+  async function handleSincronizar() {
+    try {
+      const res = await sincronizar().unwrap()
+      setSelecionados(new Set())
+      Alert.alert('Sincronizado', `${res.total} produtos encontrados · ${res.novos} novos`)
+    } catch (e: any) {
+      Alert.alert('Erro', e.message ?? 'Falha ao sincronizar')
+    }
+  }
 
   async function handleImportar() {
+    if (selecionados.size === 0) {
+      Alert.alert('Atenção', 'Marque pelo menos um produto para importar.')
+      return
+    }
     Alert.alert(
-      'Importar produtos do Colibri',
-      'Isso vai cadastrar automaticamente todos os produtos de bebidas do Colibri no catálogo de Produtos.\n\nProdutos já existentes serão ignorados.',
+      'Confirmar importação',
+      `Importar ${selecionados.size} produto(s) selecionado(s)?\n\nDepois acesse Produtos para ajustar nome, custo e setor de cada um.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Importar',
           onPress: async () => {
             try {
-              const res = await importar().unwrap()
-              setResultado(res)
-              Alert.alert(
-                '✅ Importação concluída',
-                `${res.criados} produto(s) cadastrado(s)\n${res.ignorados} já existiam e foram ignorados`,
-              )
+              const res = await importar({ colibriCodes: Array.from(selecionados) }).unwrap()
+              setSelecionados(new Set())
+              Alert.alert('✅ Concluído', `${res.criados} produto(s) importado(s)`)
             } catch (e: any) {
               Alert.alert('Erro', e.message ?? 'Falha ao importar produtos')
             }
@@ -105,55 +143,90 @@ function AbaProdutos() {
     )
   }
 
+  // Agrupa por categoria para facilitar a leitura
+  const grupos = Array.from(new Set(disponiveis.map((i) => i.grupo))).sort()
+
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.content}>
-      <Card style={s.importProdCard}>
-        <Text style={s.importProdTitle}>🚀 Importar Produtos do Colibri</Text>
-        <Text style={s.importProdDesc}>
-          Busca todos os produtos de bebidas vendidos nos últimos 30 dias no Colibri e os cadastra
-          automaticamente no catálogo de Produtos — sem precisar digitar um por um.{`\n\n`}
-          O código do Colibri já fica vinculado automaticamente.{`\n\n`}
-          Depois é só entrar em Produtos e definir se cada um é do Bar, Delivery ou Ambos.
-        </Text>
+    <View style={{ flex: 1 }}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.content}>
 
-        <ActionButton
-          label={isLoading ? 'Importando...' : '📥 Importar produtos agora'}
-          onPress={handleImportar}
-          disabled={isLoading}
-          style={{ marginTop: 8 }}
-        />
-        {isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
-      </Card>
+        {/* Cabeçalho + Sincronizar */}
+        <View style={s.syncRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.syncTitle}>Produtos disponíveis</Text>
+            <Text style={s.syncSub}>{disponiveis.length} aguardando importação</Text>
+          </View>
+          <TouchableOpacity style={[s.syncBtn, sincronizando && { opacity: 0.6 }]} onPress={handleSincronizar} disabled={sincronizando}>
+            {sincronizando
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={s.syncBtnTxt}>🔄 Sincronizar</Text>}
+          </TouchableOpacity>
+        </View>
 
-      {resultado !== null && (
-        <>
-          <SectionHeader title={`${resultado.criados} produto(s) importado(s)`} />
+        {carregando && <EmptyState icon="⏳" title="Carregando catálogo..." />}
 
-          {resultado.detalhes.length === 0 ? (
-            <EmptyState
-              icon="ℹ️"
-              title="Nenhum produto novo"
-              subtitle="Todos os produtos do Colibri já estavam cadastrados"
-            />
-          ) : (
-            resultado.detalhes.map((nome, i) => (
-              <Card key={i} style={s.importProdItem}>
-                <Text style={s.importProdItemTxt}>✓ {nome}</Text>
-              </Card>
-            ))
-          )}
-        </>
+        {!carregando && catalogo.length === 0 && (
+          <EmptyState icon="🔄" title="Catálogo vazio" subtitle="Toque em Sincronizar para buscar os produtos do Colibri" />
+        )}
+
+        {!carregando && catalogo.length > 0 && disponiveis.length === 0 && (
+          <EmptyState icon="✅" title="Todos os produtos já importados" subtitle="Sincronize para verificar se há novidades no Colibri" />
+        )}
+
+        {disponiveis.length > 0 && (
+          <>
+            {/* Selecionar / desmarcar todos */}
+            <TouchableOpacity style={s.selecionarTodosRow} onPress={toggleTodos}>
+              <View style={[s.checkbox, todosMarcados && s.checkboxOn]}>
+                {todosMarcados && <Text style={s.checkboxTick}>✓</Text>}
+              </View>
+              <Text style={s.selecionarTodosTxt}>
+                {todosMarcados ? 'Desmarcar todos' : 'Selecionar todos'} ({disponiveis.length})
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lista agrupada por categoria */}
+            {grupos.map((grupo) => {
+              const itens = disponiveis.filter((i) => i.grupo === grupo)
+              return (
+                <View key={grupo}>
+                  <SectionHeader title={grupo} />
+                  {itens.map((item) => {
+                    const marcado = selecionados.has(item.colibriCode)
+                    return (
+                      <TouchableOpacity key={item.colibriCode} style={s.checkItem} onPress={() => toggleItem(item.colibriCode)}>
+                        <View style={[s.checkbox, marcado && s.checkboxOn]}>
+                          {marcado && <Text style={s.checkboxTick}>✓</Text>}
+                        </View>
+                        <View style={s.checkItemInfo}>
+                          <Text style={s.checkItemNome}>{item.colibriNome}</Text>
+                          <Text style={s.checkItemSub}>Cód: {item.colibriCode}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              )
+            })}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Botão fixo na base — aparece só quando há seleção */}
+      {selecionados.size > 0 && (
+        <View style={s.importarBar}>
+          <TouchableOpacity
+            style={[s.importarBtn, importando && { opacity: 0.7 }]}
+            onPress={handleImportar}
+            disabled={importando}
+          >
+            {importando
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.importarBtnTxt}>📥 Importar {selecionados.size} produto(s)</Text>}
+          </TouchableOpacity>
+        </View>
       )}
-
-      <Card style={s.infoCard}>
-        <Text style={s.infoTitle}>💡 Próximos passos</Text>
-        <Text style={s.infoTxt}>1. Importe os produtos aqui</Text>
-        <Text style={s.infoTxt}>2. Vá em Admin → Produtos</Text>
-        <Text style={s.infoTxt}>3. Ajuste nome, custo e estoque mínimo de cada um</Text>
-        <Text style={s.infoTxt}>4. Defina se é do Bar, Delivery ou Ambos</Text>
-        <Text style={s.infoTxt}>5. Desative os que não vai usar</Text>
-      </Card>
-    </ScrollView>
+    </View>
   )
 }
 
@@ -761,10 +834,17 @@ const s = StyleSheet.create({
   histStatLabel: { fontSize: 11, color: colors.textSub },
   histErro: { fontSize: 12, color: colors.warning, fontWeight: '600' },
 
-  // Importar Produtos
-  importProdCard: { gap: 8, padding: 18 },
-  importProdTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  importProdDesc: { fontSize: 13, color: colors.textSub, lineHeight: 20 },
-  importProdItem: { padding: 12, flexDirection: 'row', alignItems: 'center' },
-  importProdItemTxt: { fontSize: 13, color: colors.success, fontWeight: '600', flex: 1 },
+  // Checklist de importação
+  selecionarTodosRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 4 },
+  selecionarTodosTxt: { fontSize: 14, fontWeight: '700', color: colors.text },
+  checkItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: colors.border },
+  checkItemInfo: { flex: 1 },
+  checkItemNome: { fontSize: 14, fontWeight: '600', color: colors.text },
+  checkItemSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxTick: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  importarBar: { padding: 16, paddingBottom: 24, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  importarBtn: { backgroundColor: colors.primary, borderRadius: 14, padding: 16, alignItems: 'center' },
+  importarBtnTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
 })

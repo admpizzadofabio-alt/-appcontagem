@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { NotFoundError, BusinessRuleError } from '../../shared/errors.js'
+import { validarBase64Imagem } from '../../shared/validarImagem.js'
 
 export async function listar(filtroAtivo?: boolean) {
   const where = filtroAtivo !== undefined ? { ativo: filtroAtivo } : {}
@@ -10,12 +11,14 @@ export async function listar(filtroAtivo?: boolean) {
 }
 
 export async function criar(data: { nomeBebida: string; categoria: string; unidadeMedida: string; volumePadrao?: string; custoUnitario?: number; estoqueMinimo?: number; setorPadrao?: string; imagem?: string }) {
+  if (data.imagem) validarBase64Imagem(data.imagem, 'imagem')
   return prisma.produto.create({ data })
 }
 
 export async function atualizar(id: string, data: Partial<{ nomeBebida: string; categoria: string; unidadeMedida: string; volumePadrao: string; custoUnitario: number; estoqueMinimo: number; perdaThreshold: number; setorPadrao: string; imagem: string; ativo: boolean }>) {
   const prod = await prisma.produto.findUnique({ where: { id } })
   if (!prod) throw new NotFoundError('Produto não encontrado')
+  if (data.imagem) validarBase64Imagem(data.imagem, 'imagem')
   return prisma.produto.update({ where: { id }, data: { ...data, revisadoAdmin: true } })
 }
 
@@ -29,21 +32,28 @@ export async function excluirFisico(id: string) {
   const prod = await prisma.produto.findUnique({ where: { id } })
   if (!prod) throw new NotFoundError('Produto não encontrado')
 
-  const [movs, estoque, contagens, pedidos] = await Promise.all([
+  const [movs, contagensFechadas, pedidos] = await Promise.all([
     prisma.movimentacaoEstoque.count({ where: { produtoId: id } }),
-    prisma.estoqueAtual.count({ where: { produtoId: id } }),
-    prisma.itemContagem.count({ where: { produtoId: id } }),
+    prisma.itemContagem.count({
+      where: { produtoId: id, contagem: { status: 'Fechada' } },
+    }),
     prisma.pedidoCompra.count({ where: { produtoId: id } }),
   ])
 
-  const total = movs + estoque + contagens + pedidos
-  if (total > 0) {
+  if (movs + contagensFechadas + pedidos > 0) {
     throw new BusinessRuleError(
-      'Produto possui histórico (movimentações, estoque ou contagens) e não pode ser excluído. Use "Desativar" para ocultá-lo.'
+      'Produto possui histórico (movimentações ou contagens finalizadas) e não pode ser excluído. Use "Desativar" para ocultá-lo.'
     )
   }
 
-  // Remove mapeamentos Colibri associados antes de deletar
-  await prisma.colibriProduto.deleteMany({ where: { produtoId: id } })
-  await prisma.produto.delete({ where: { id } })
+  // Remove todos os registros dependentes sem histórico real antes de deletar
+  await prisma.$transaction([
+    // Itens de contagens canceladas/abertas (as fechadas já bloquearam acima)
+    prisma.itemContagem.deleteMany({
+      where: { produtoId: id, contagem: { status: { not: 'Fechada' } } },
+    }),
+    prisma.estoqueAtual.deleteMany({ where: { produtoId: id } }),
+    prisma.colibriProduto.deleteMany({ where: { produtoId: id } }),
+    prisma.produto.delete({ where: { id } }),
+  ])
 }

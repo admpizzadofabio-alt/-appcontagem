@@ -13,9 +13,9 @@ import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
 type Nav = NativeStackNavigationProp<AppStackParams>
-type RouteT = RouteProp<AppStackParams, 'AbrirCaixa'>
+type RouteT = RouteProp<AppStackParams, 'AbrirTurno'>
 
-export function AbrirCaixaScreen() {
+export function AbrirTurnoScreen() {
   const navigation = useNavigation<Nav>()
   const route = useRoute<RouteT>()
   const { usuario } = useAuth()
@@ -28,10 +28,15 @@ export function AbrirCaixaScreen() {
   const [abrir, { isLoading: abrindo }] = useAbrirTurnoMutation()
   const [fechar, { isLoading: fechando }] = useFecharTurnoMutation()
   const [deletar, { isLoading: deletando }] = useDeletarTurnoMutation()
-  const { data: transferenciasPendentes = [] } = useListarTransferenciasPendentesQuery({ local }, { skip: !turnoAtual })
+  const { data: transferenciasPendentes = [] } = useListarTransferenciasPendentesQuery({ local })
   const [confirmarTransferencia] = useConfirmarTransferenciaMutation()
 
-  async function handleConfirmarTransferencia(id: string, nomeProduto: string) {
+  async function handleConfirmarTransferencia(
+    id: string,
+    nomeProduto: string,
+    setorPadrao: string,
+    localDestino: string,
+  ) {
     Alert.alert(
       'Confirmar recebimento',
       `Confirma o recebimento de ${nomeProduto}? O estoque será atualizado agora.`,
@@ -42,7 +47,17 @@ export function AbrirCaixaScreen() {
           onPress: async () => {
             try {
               await confirmarTransferencia(id).unwrap()
-              Alert.alert('Recebido!', 'Estoque atualizado com sucesso.')
+              const setorOk = setorPadrao === 'Todos' || setorPadrao === localDestino
+              const isAdmin = usuario?.nivelAcesso === 'Admin' || usuario?.nivelAcesso === 'Supervisor'
+              if (!setorOk && isAdmin) {
+                Alert.alert(
+                  '⚠️ Atenção Admin',
+                  `"${nomeProduto}" está cadastrado como produto do ${setorPadrao}, mas foi transferido para ${localDestino}.\n\nAtualize o setor do produto para "Todos" para que apareça na contagem e estoque do ${localDestino}.`,
+                  [{ text: 'Entendido' }],
+                )
+              } else {
+                Alert.alert('Recebido!', 'Estoque atualizado com sucesso.')
+              }
             } catch (e: any) {
               Alert.alert('Erro', e.message ?? 'Falha ao confirmar transferência')
             }
@@ -99,7 +114,7 @@ export function AbrirCaixaScreen() {
   async function handleAbrir() {
     try {
       const t = await abrir({ local }).unwrap()
-      navigation.replace('ContagemTurno', { contagemId: t.contagemId! })
+      navigation.replace('ContagemTurno', { contagemId: t.contagemId!, colibriPendente: t.colibriPendente })
     } catch (e: any) {
       Alert.alert('Erro', e.message ?? 'Falha ao abrir turno')
     }
@@ -107,7 +122,7 @@ export function AbrirCaixaScreen() {
 
   function continuarContagem() {
     if (turnoAtual?.contagemId) {
-      navigation.navigate('ContagemTurno', { contagemId: turnoAtual.contagemId })
+      navigation.navigate('ContagemTurno', { contagemId: turnoAtual.contagemId, colibriPendente: turnoAtual.colibriPendente })
     }
   }
 
@@ -165,7 +180,7 @@ export function AbrirCaixaScreen() {
                     </View>
                     <TouchableOpacity
                       style={s.confirmarBtn}
-                      onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida)}
+                      onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
                     >
                       <Text style={s.confirmarBtnTxt}>Confirmar</Text>
                     </TouchableOpacity>
@@ -175,11 +190,22 @@ export function AbrirCaixaScreen() {
             )}
 
             {turnoAtual.contagem?.status === 'Aberta' ? (
-              <ActionButton label="Continuar contagem" onPress={continuarContagem} />
+              <ActionButton label="⚠️ Contagem pendente — toque para continuar" variant="danger" onPress={continuarContagem} />
             ) : (
-              <Card style={s.infoCard}>
-                <Text style={s.infoTxt}>✅ Contagem finalizada. Turno em operação.</Text>
-              </Card>
+              <>
+                <Card style={s.infoCard}>
+                  <Text style={s.infoTxt}>✅ Contagem finalizada. Turno em operação.</Text>
+                </Card>
+                {turnoAtual.contagemId && (
+                  <TouchableOpacity
+                    style={s.verResumoBtn}
+                    onPress={() => navigation.navigate('ResumoContagem', { contagemId: turnoAtual.contagemId! })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={s.verResumoBtnTxt}>📋 Ver resumo da contagem</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
 
 
@@ -211,6 +237,26 @@ export function AbrirCaixaScreen() {
 
         {!isLoading && !turnoAtual && (
           <>
+            {transferenciasPendentes.length > 0 && (
+              <Card style={s.transferenciaCard}>
+                <Text style={s.transferenciaTitle}>📦 {transferenciasPendentes.length} transferência{transferenciasPendentes.length !== 1 ? 's' : ''} aguardando confirmação</Text>
+                {transferenciasPendentes.map((t) => (
+                  <View key={t.id} style={s.transferenciaItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.transferenciaProduto}>{t.produto.nomeBebida}</Text>
+                      <Text style={s.transferenciaSub}>{t.quantidade} {t.produto.unidadeMedida} · De: {t.localOrigem} · Por: {t.usuario.nome}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={s.confirmarBtn}
+                      onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
+                    >
+                      <Text style={s.confirmarBtnTxt}>Confirmar</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </Card>
+            )}
+
             <Card style={s.welcomeCard}>
               <Text style={s.welcomeIcon}>🔓</Text>
               <Text style={s.welcomeTitle}>Abrir turno do {local}</Text>
@@ -264,6 +310,9 @@ const s = StyleSheet.create({
   infoCard: { backgroundColor: colors.infoLight, gap: 4 },
   infoTitle: { fontSize: 13, fontWeight: '700', color: colors.info, marginBottom: 4 },
   infoTxt: { fontSize: 12, color: colors.info, lineHeight: 18 },
+
+  verResumoBtn: { alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.accentLight },
+  verResumoBtnTxt: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   fecharTurnoBtn: { alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.danger, backgroundColor: colors.dangerLight },
   fecharTurnoTxt: { fontSize: 14, fontWeight: '700', color: colors.danger },

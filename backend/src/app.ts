@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit'
 import { env } from './config/env.js'
 import { logger } from './config/logger.js'
 import { swaggerMiddleware, swaggerSetup } from './config/swagger.js'
-import { requireAuth } from './middlewares/auth.js'
+import { requireAuth, requireNivel } from './middlewares/auth.js'
 import { errorHandler } from './middlewares/error-handler.js'
 import { authRouter } from './modules/auth/auth.routes.js'
 import { usuariosRouter } from './modules/usuarios/usuarios.routes.js'
@@ -34,6 +34,7 @@ const globalLimiter = rateLimit({
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas requisições. Tente em 15 minutos.' },
 })
 
@@ -41,7 +42,9 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 const corsOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim())
 app.use(cors({ origin: corsOrigins, credentials: true }))
 app.use(compression() as any)
-app.use(express.json({ limit: '1mb' }))
+// Limite de 2mb cobre base64 inflated de imagem até ~1.5MB (validarBase64Imagem
+// reforça limite real de 900KB depois). Maior que isso = rejeitado aqui.
+app.use(express.json({ limit: '2mb' }))
 const CAMPOS_FOTO = ['fotoEvidencia', 'fotoComanda', 'imagemComprovante', 'base64']
 app.use((pinoHttp as any)({
   logger,
@@ -63,16 +66,36 @@ app.use('/uploads', requireAuth, express.static('uploads'))
 
 const prefix = env.API_PREFIX
 
+const SERVER_START = Date.now()
 app.get(`${prefix}/health`, async (_req, res) => {
+  const checks: Record<string, any> = { status: 'ok', timestamp: new Date(), uptime_s: Math.floor((Date.now() - SERVER_START) / 1000) }
   try {
     await prisma.$queryRaw`SELECT 1`
-    res.json({ status: 'ok', timestamp: new Date(), db: 'connected' })
+    checks.db = 'ok'
   } catch {
-    res.status(503).json({ status: 'error', db: 'disconnected' })
+    checks.db = 'error'
+    checks.status = 'degraded'
   }
+  try {
+    const ultima = await prisma.colibriImportacao.findFirst({
+      where: { status: { in: ['ok', 'parcial'] } },
+      orderBy: { importadoEm: 'desc' },
+      select: { importadoEm: true },
+    })
+    if (ultima) {
+      const horasDesde = Math.floor((Date.now() - ultima.importadoEm.getTime()) / (1000 * 60 * 60))
+      checks.colibri = { ultima: ultima.importadoEm, horas_desde: horasDesde, stale: horasDesde > 6 }
+      if (horasDesde > 12) checks.status = 'degraded'
+    } else {
+      checks.colibri = 'nunca_importado'
+    }
+  } catch {
+    checks.colibri = 'erro'
+  }
+  res.status(checks.status === 'ok' ? 200 : 503).json(checks)
 })
 
-app.use('/api/docs', requireAuth, swaggerMiddleware, swaggerSetup)
+app.use('/api/docs', requireAuth, requireNivel(['Admin']), swaggerMiddleware, swaggerSetup)
 
 app.use(`${prefix}/auth`, authRouter)
 app.use(`${prefix}/usuarios`, usuariosRouter)

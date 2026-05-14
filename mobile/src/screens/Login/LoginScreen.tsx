@@ -12,7 +12,7 @@ export function LoginScreen() {
 
   async function handlePinChange(value: string) {
     setPin(value)
-    if (value.length === 4) {
+    if (value.length === 6) {
       setLoading(true)
       try {
         await signIn(value, true)
@@ -42,13 +42,13 @@ export function LoginScreen() {
 
       <View style={s.card}>
         <Text style={s.cardTitle}>Bem-vindo!</Text>
-        <Text style={s.cardSub}>Digite seu PIN de 4 dígitos</Text>
+        <Text style={s.cardSub}>Digite seu PIN de 6 dígitos</Text>
       </View>
 
       <View style={s.pinArea}>
         {loading
           ? <ActivityIndicator size="large" color="#fff" style={{ marginVertical: 40 }} />
-          : <PinPad value={pin} onChange={handlePinChange} maxLength={4} />
+          : <PinPad value={pin} onChange={handlePinChange} maxLength={6} />
         }
 
         {biometricAvailable && !loading && (

@@ -3,7 +3,7 @@ import { ZodError } from 'zod'
 import { Prisma } from '@prisma/client'
 import { AppError } from '../shared/errors.js'
 import { logger } from '../config/logger.js'
-import { env } from '../config/env.js'
+import { captureException } from '../config/sentry.js'
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {
@@ -34,6 +34,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
 
   logger.error({ err, path: req.path, method: req.method }, 'Erro não tratado')
+  captureException(err, { path: req.path, method: req.method, userId: (req as any).user?.sub })
 
   return res.status(500).json({
     code: 'INTERNAL_ERROR',

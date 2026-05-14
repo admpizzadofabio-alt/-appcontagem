@@ -33,6 +33,11 @@ export async function criar(data: CriarData) {
   const produto = await prisma.produto.findUnique({ where: { id: data.produtoId } })
   if (!produto) throw new NotFoundError('Produto não encontrado')
 
+  // VULN-002: CargaInicial exige Admin ou Supervisor
+  if (data.tipoMov === 'CargaInicial' && data.nivelAcesso !== 'Admin' && data.nivelAcesso !== 'Supervisor') {
+    throw new ForbiddenError('Apenas Admin ou Supervisor podem registrar Carga Inicial')
+  }
+
   // Operador só pode operar no próprio setor (Admin/Supervisor liberados)
   if (data.tipoMov === 'Transferencia') {
     // Em transferência: origem deve ser o setor do operador
@@ -49,7 +54,7 @@ export async function criar(data: CriarData) {
   const isGrandePerda = data.tipoMov === 'AjustePerda' && data.quantidade > threshold
   const tipoMov = data.tipoMov as TipoMovimentacao
 
-  const isPendente = tipoMov === 'Transferencia' || data.pendente === true
+  const isPendente = tipoMov === 'Transferencia' || isGrandePerda || data.pendente === true
   const obsCompleta = data.justificativaEntrada
     ? `[Justificativa: ${data.justificativaEntrada}]${data.observacao ? ' ' + data.observacao : ''}`
     : data.observacao
@@ -90,14 +95,87 @@ export async function criar(data: CriarData) {
       },
     })
 
-    return { ...movimentacao, precisaAprovacao: false, isGrandePerda }
+    return { ...movimentacao, precisaAprovacao: isPendente, isGrandePerda }
   })
 
   return mov
 }
 
 async function _atualizarEstoque(tx: any, data: CriarData) {
-  if (['Entrada', 'CargaInicial'].includes(data.tipoMov)) {
+  if (data.tipoMov === 'CargaInicial') {
+    // Carga Inicial = marco zero do produto: substitui estoque no local especificado,
+    // ZERA estoque em outros locais (marco é por produto, não por local) e arquiva
+    // Saídas Colibri anteriores. Movimentações antigas ficam no banco (auditoria),
+    // mas não impactam mais o estoque atual.
+    const local = data.localDestino ?? data.localOrigem ?? 'Bar'
+    const agora = new Date()
+    const existing = await tx.estoqueAtual.findUnique({ where: { produtoId_local: { produtoId: data.produtoId, local } } })
+    const estoqueAnterior = existing?.quantidadeAtual ?? 0
+
+    // Estoque em outros locais antes da limpeza (snapshot p/ auditoria)
+    const outrosLocais = await tx.estoqueAtual.findMany({
+      where: { produtoId: data.produtoId, local: { not: local }, quantidadeAtual: { gt: 0 } },
+      select: { local: true, quantidadeAtual: true },
+    })
+
+    await tx.estoqueAtual.upsert({
+      where: { produtoId_local: { produtoId: data.produtoId, local } },
+      create: { produtoId: data.produtoId, local, quantidadeAtual: data.quantidade, atualizadoPor: data.usuarioId },
+      update: { quantidadeAtual: data.quantidade, atualizadoPor: data.usuarioId },
+    })
+
+    if (outrosLocais.length > 0) {
+      await tx.estoqueAtual.updateMany({
+        where: { produtoId: data.produtoId, local: { not: local } },
+        data: { quantidadeAtual: 0, atualizadoPor: data.usuarioId },
+      })
+    }
+
+    await tx.produto.update({
+      where: { id: data.produtoId },
+      data: { marcoInicialEm: agora },
+    })
+
+    // Conta e registra Saídas Colibri arquivadas (auditoria), depois remove
+    const saidasArquivar = await tx.movimentacaoEstoque.findMany({
+      where: {
+        produtoId: data.produtoId,
+        tipoMov: 'Saida',
+        referenciaOrigem: { startsWith: 'colibri:' },
+        dataMov: { lt: agora },
+      },
+      select: { id: true, quantidade: true, dataMov: true, referenciaOrigem: true },
+    })
+
+    if (saidasArquivar.length > 0 || outrosLocais.length > 0) {
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: data.usuarioId,
+          usuarioNome: data.usuarioNome,
+          setor: data.setor,
+          acao: 'CARGA_INICIAL_LIMPEZA',
+          entidade: 'MovimentacaoEstoque',
+          idReferencia: data.produtoId,
+          detalhes: JSON.stringify({
+            localCarga: local,
+            estoqueAnterior, estoqueNovo: data.quantidade,
+            outrosLocaisZerados: outrosLocais,
+            saidasColibriRemovidas: saidasArquivar.length,
+            quantidadeTotalSaidasRemovidas: saidasArquivar.reduce((a: number, s: any) => a + s.quantidade, 0),
+            saidasIds: saidasArquivar.map((s: any) => s.id),
+          }),
+        },
+      })
+      if (saidasArquivar.length > 0) {
+        await tx.movimentacaoEstoque.deleteMany({
+          where: { id: { in: saidasArquivar.map((s: any) => s.id) } },
+        })
+      }
+    }
+    return
+  }
+
+  if (data.tipoMov === 'Entrada') {
     await _upsertEstoque(tx, data.produtoId, data.localDestino ?? data.localOrigem ?? 'Bar', data.quantidade, data.usuarioId)
   } else if (['Saida', 'AjustePerda'].includes(data.tipoMov)) {
     await _upsertEstoque(tx, data.produtoId, data.localOrigem ?? 'Bar', -data.quantidade, data.usuarioId)
@@ -117,21 +195,29 @@ async function _upsertEstoque(tx: any, produtoId: string, local: string, delta: 
   })
 }
 
-export async function listar(filtros: { produtoId?: string; tipoMov?: string; local?: string; dataInicio?: string; dataFim?: string }) {
+export async function listar(filtros: {
+  produtoId?: string; tipoMov?: string; local?: string
+  dataInicio?: string; dataFim?: string
+  take?: number; skip?: number
+}) {
   const where: any = {}
   if (filtros.produtoId) where.produtoId = filtros.produtoId
   if (filtros.tipoMov) where.tipoMov = filtros.tipoMov
   if (filtros.local) where.OR = [{ localOrigem: filtros.local }, { localDestino: filtros.local }]
   if (filtros.dataInicio || filtros.dataFim) {
     where.dataMov = {}
-    if (filtros.dataInicio) where.dataMov.gte = new Date(filtros.dataInicio)
-    if (filtros.dataFim) where.dataMov.lte = new Date(filtros.dataFim)
+    if (filtros.dataInicio) where.dataMov.gte = new Date(filtros.dataInicio + 'T00:00:00-03:00')
+    if (filtros.dataFim) where.dataMov.lte = new Date(filtros.dataFim + 'T23:59:59-03:00')
   }
+
+  const take = Math.min(filtros.take ?? 200, 500)
+  const skip = filtros.skip ?? 0
 
   return prisma.movimentacaoEstoque.findMany({
     where,
     orderBy: { dataMov: 'desc' },
-    take: 200,
+    take,
+    skip,
     include: {
       produto: { select: { nomeBebida: true, unidadeMedida: true, perdaThreshold: true } },
       usuario: { select: { nome: true } },
@@ -145,7 +231,7 @@ export async function listarTransferenciasPendentes(localDestino: string) {
     where: { tipoMov: 'Transferencia', aprovacaoStatus: StatusAprovacao.Pendente, localDestino },
     orderBy: { dataMov: 'desc' },
     include: {
-      produto: { select: { nomeBebida: true, unidadeMedida: true } },
+      produto: { select: { nomeBebida: true, unidadeMedida: true, setorPadrao: true } },
       usuario: { select: { nome: true } },
     },
   })
@@ -153,17 +239,17 @@ export async function listarTransferenciasPendentes(localDestino: string) {
 
 export async function confirmarTransferencia(movId: string, confirmadorId: string, confirmadorNome: string, setor: string, nivelAcesso: string) {
   return prisma.$transaction(async (tx) => {
-    const mov = await tx.movimentacaoEstoque.findUnique({ where: { id: movId } })
-    if (!mov) throw new NotFoundError('Transferência não encontrada')
-    if (mov.tipoMov !== 'Transferencia') throw new ForbiddenError('Movimentação não é uma transferência')
-    if (mov.aprovacaoStatus !== StatusAprovacao.Pendente) throw new ForbiddenError('Transferência já foi confirmada ou rejeitada')
-    if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
-      throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode confirmar esta transferência`)
-
-    await tx.movimentacaoEstoque.update({
-      where: { id: movId },
+    // VULN-003: atualização atômica garante que apenas uma confirmação simultânea vence
+    const updated = await tx.movimentacaoEstoque.updateMany({
+      where: { id: movId, tipoMov: 'Transferencia', aprovacaoStatus: StatusAprovacao.Pendente },
       data: { aprovacaoStatus: StatusAprovacao.Aprovado },
     })
+    if (updated.count === 0) throw new ForbiddenError('Transferência não encontrada, não é transferência ou já foi confirmada')
+
+    const mov = await tx.movimentacaoEstoque.findUnique({ where: { id: movId } })
+    if (!mov) throw new NotFoundError('Transferência não encontrada')
+    if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
+      throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode confirmar esta transferência`)
 
     await _upsertEstoque(tx, mov.produtoId, mov.localOrigem!, -mov.quantidade, confirmadorId)
     await _upsertEstoque(tx, mov.produtoId, mov.localDestino!, mov.quantidade, confirmadorId)
@@ -202,11 +288,17 @@ export async function aprovar(aprovacaoId: string, aprovadorId: string, aprovado
   return prisma.$transaction(async (tx) => {
     const aprovacao = await tx.aprovacaoMovimentacao.findUnique({
       where: { id: aprovacaoId },
-      include: { movimentacao: true },
+      include: { movimentacao: true, solicitante: { select: { nivelAcesso: true } } },
     })
     if (!aprovacao) throw new NotFoundError('Aprovação não encontrada')
+    if (aprovacao.status !== StatusAprovacao.Pendente) throw new BusinessRuleError('Esta aprovação já foi resolvida')
+    // VULN-008: auto-aprovação bloqueada + Supervisor não aprova outro Supervisor
     if (aprovacao.solicitanteId === aprovadorId) {
       throw new ForbiddenError('Você não pode aprovar sua própria solicitação')
+    }
+    const aprovador = await tx.usuario.findUnique({ where: { id: aprovadorId }, select: { nivelAcesso: true } })
+    if (aprovador?.nivelAcesso === 'Supervisor' && aprovacao.solicitante?.nivelAcesso === 'Supervisor') {
+      throw new ForbiddenError('Supervisor não pode aprovar solicitação de outro Supervisor')
     }
 
     await tx.aprovacaoMovimentacao.update({
@@ -240,6 +332,10 @@ export async function rejeitar(aprovacaoId: string, aprovadorId: string, aprovad
   return prisma.$transaction(async (tx) => {
     const aprovacao = await tx.aprovacaoMovimentacao.findUnique({ where: { id: aprovacaoId } })
     if (!aprovacao) throw new NotFoundError('Aprovação não encontrada')
+    if (aprovacao.status !== StatusAprovacao.Pendente) throw new BusinessRuleError('Esta aprovação já foi resolvida')
+    if (aprovacao.solicitanteId === aprovadorId) {
+      throw new ForbiddenError('Você não pode rejeitar sua própria solicitação')
+    }
 
     await tx.aprovacaoMovimentacao.update({
       where: { id: aprovacaoId },

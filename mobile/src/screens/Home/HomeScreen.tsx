@@ -1,16 +1,18 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSummaryEstoqueQuery } from '../../services/api/estoque'
-import { useListarPendentesQuery } from '../../services/api/movimentacoes'
+import { useListarPendentesQuery, useListarTransferenciasPendentesQuery } from '../../services/api/movimentacoes'
 import { useTurnoAtualQuery } from '../../services/api/turnos'
 import { StatCard } from '../../components/StatCard'
 import { Card } from '../../components/Card'
 import { SectionHeader } from '../../components/SectionHeader'
 import { BotaoColibriCarregar } from '../../components/BotaoColibriCarregar'
+import { useColibriNovosQuery } from '../../services/api/colibri'
+import { useListarProdutosQuery } from '../../services/api/produtos'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
@@ -25,11 +27,40 @@ export function HomeScreen() {
   const isAdmin = usuario?.nivelAcesso === 'Admin'
   const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
   const localOperador = (usuario?.setor === 'Delivery' ? 'Delivery' : 'Bar') as 'Bar' | 'Delivery'
-  const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador }, { skip: isAdmin })
+  const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador })
+  const { data: turnoDelivery } = useTurnoAtualQuery({ local: 'Delivery' }, { skip: !isAdmin })
+  const { data: turnoBar } = useTurnoAtualQuery({ local: 'Bar' }, { skip: !isAdmin })
+  const { data: colibriNovos } = useColibriNovosQuery(undefined, {
+    skip: !isSup,
+    pollingInterval: 60 * 60 * 1000, // re-verifica a cada 1h
+  })
+  const { data: produtosAtivos = [] } = useListarProdutosQuery({ ativo: true }, { skip: !isSup })
+  const semCargaCount = produtosAtivos.filter((p) => !p.marcoInicialEm).length
+
+  const [pendentesVistos, setPendentesVistos] = useState<Set<string>>(new Set())
+  const pendentesNovos = isAdmin ? (pendentes ?? []).filter((p) => !pendentesVistos.has(p.id)) : []
+
+  function irParaAprovacoes() {
+    setPendentesVistos(new Set((pendentes ?? []).map((p) => p.id)))
+    nav.navigate('Admin')
+  }
 
   const turnoAberto = !!turnoAtual
   const contagemFinalizada = turnoAtual?.contagem?.status === 'Fechada'
   const operacoesLiberadas = isAdmin || (turnoAberto && contagemFinalizada)
+  const turnosAdmin = isAdmin ? [turnoBar, turnoDelivery].filter(Boolean) : []
+  const algumTurnoAberto = isAdmin ? turnosAdmin.length > 0 : turnoAberto
+
+  const localOutro = (localOperador === 'Bar' ? 'Delivery' : 'Bar') as 'Bar' | 'Delivery'
+  const turnoOutro = localOperador === 'Bar' ? turnoDelivery : turnoBar
+  const { data: transfPendentes = [] } = useListarTransferenciasPendentesQuery(
+    { local: localOperador },
+    { skip: !operacoesLiberadas },
+  )
+  const { data: transfPendentesOutro = [] } = useListarTransferenciasPendentesQuery(
+    { local: localOutro },
+    { skip: !isAdmin },
+  )
 
   function bloqueadoAlert() {
     if (!turnoAberto) {
@@ -86,11 +117,11 @@ export function HomeScreen() {
           )}
         </View>
 
-        {/* Abrir Turno em destaque — só mostra quando não há turno aberto (ou para Admin) */}
-        {(isAdmin || !turnoAberto) && (
+        {/* Abrir Turno em destaque — só mostra quando não há nenhum turno aberto */}
+        {!algumTurnoAberto && (
           <TouchableOpacity
             style={s.openCaixaBtn}
-            onPress={() => nav.navigate('AbrirCaixa', usuario?.setor === 'Delivery' ? { local: 'Delivery' } : { local: 'Bar' })}
+            onPress={() => nav.navigate('AbrirTurno', usuario?.setor === 'Delivery' ? { local: 'Delivery' } : { local: 'Bar' })}
             activeOpacity={0.85}
           >
             <Text style={s.openCaixaIcon}>🔓</Text>
@@ -102,11 +133,34 @@ export function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Status do turno */}
-        {!isAdmin && (
+        {/* Status do turno — Admin vê um card por local aberto, Operador vê o próprio */}
+        {isAdmin ? turnosAdmin.map((t) => {
+          const tContagemOk = t!.contagem?.status === 'Fechada'
+          return (
+            <TouchableOpacity
+              key={t!.id}
+              style={[s.turnoStatusCard, tContagemOk ? s.turnoStatusOk : s.turnoStatusBloqueado]}
+              onPress={() => nav.navigate('AbrirTurno', { local: t!.local as 'Bar' | 'Delivery' })}
+              activeOpacity={0.85}
+            >
+              <Text style={s.turnoStatusIcon}>{tContagemOk ? '🟢' : '🟡'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.turnoStatusTitle}>
+                  {tContagemOk ? 'Turno em operação' : 'Contagem pendente'}
+                </Text>
+                <Text style={s.turnoStatusSub}>
+                  {tContagemOk
+                    ? `${t!.local} · Operações liberadas`
+                    : `${t!.local} · Finalize a contagem para liberar operações`}
+                </Text>
+              </View>
+              <Text style={s.turnoStatusArrow}>›</Text>
+            </TouchableOpacity>
+          )
+        }) : (
           <TouchableOpacity
             style={[s.turnoStatusCard, operacoesLiberadas ? s.turnoStatusOk : s.turnoStatusBloqueado]}
-            onPress={() => nav.navigate('AbrirCaixa', { local: localOperador })}
+            onPress={() => nav.navigate('AbrirTurno', { local: localOperador })}
             activeOpacity={0.85}
           >
             <Text style={s.turnoStatusIcon}>{operacoesLiberadas ? '🟢' : turnoAberto ? '🟡' : '🔴'}</Text>
@@ -126,8 +180,96 @@ export function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Alerta de aprovações pendentes — Admin */}
+        {pendentesNovos.length > 0 && (
+          <TouchableOpacity style={s.alertaRevisaoCard} onPress={irParaAprovacoes} activeOpacity={0.85}>
+            <Text style={s.alertaRevisaoIcon}>🔔</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.alertaRevisaoTitle}>
+                {pendentesNovos.length} aprovação{pendentesNovos.length !== 1 ? 'ões' : ''} pendente{pendentesNovos.length !== 1 ? 's' : ''}
+              </Text>
+              <Text style={s.alertaRevisaoSub}>Entradas e perdas aguardando revisão · Toque para ver</Text>
+            </View>
+            <Text style={s.alertaRevisaoArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Transferências pendentes de confirmação */}
+        {transfPendentes.length > 0 && (
+          <TouchableOpacity
+            style={s.transfPendenteCard}
+            onPress={() => nav.navigate('AbrirTurno', { local: localOperador })}
+            activeOpacity={0.85}
+          >
+            <Text style={s.transfPendenteIcon}>📦</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.transfPendenteTitle}>
+                {transfPendentes.length} transferência{transfPendentes.length !== 1 ? 's' : ''} aguardando confirmação
+              </Text>
+              <Text style={s.transfPendenteSub}>{localOperador} · Toque para confirmar recebimento</Text>
+            </View>
+            <Text style={s.transfPendenteArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+        {isAdmin && transfPendentesOutro.length > 0 && (
+          <TouchableOpacity
+            style={s.transfPendenteCard}
+            onPress={() => nav.navigate('AbrirTurno', { local: localOutro })}
+            activeOpacity={0.85}
+          >
+            <Text style={s.transfPendenteIcon}>📦</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.transfPendenteTitle}>
+                {transfPendentesOutro.length} transferência{transfPendentesOutro.length !== 1 ? 's' : ''} aguardando confirmação
+              </Text>
+              <Text style={s.transfPendenteSub}>{localOutro} · Toque para confirmar recebimento</Text>
+            </View>
+            <Text style={s.transfPendenteArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Aviso: produtos sem carga inicial */}
+        {isSup && semCargaCount > 0 && (
+          <TouchableOpacity style={s.semCargaCard} onPress={() => nav.navigate('Produtos')} activeOpacity={0.85}>
+            <Text style={s.semCargaIcon}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.semCargaTitle}>
+                {semCargaCount} produto(s) sem carga inicial
+              </Text>
+              <Text style={s.semCargaSub}>
+                Colibri não desconta vendas sem carga. Toque para definir.
+              </Text>
+            </View>
+            <Text style={s.semCargaArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Vendas Colibri — importar antes de abrir turno/contar */}
-        <SectionHeader title="Integração Colibri" />
+        <View style={s.colibriHeaderRow}>
+          <Text style={s.colibriHeaderTitle}>Integração Colibri</Text>
+          {isSup && (colibriNovos?.count ?? 0) > 0 && (
+            <View style={s.badgeWrap}>
+              <Text style={s.badgeTxt}>{colibriNovos!.count}</Text>
+            </View>
+          )}
+        </View>
+
+        {isSup && (colibriNovos?.count ?? 0) > 0 && (
+          <TouchableOpacity style={s.novosProdutosCard} onPress={() => nav.navigate('Colibri')} activeOpacity={0.85}>
+            <Text style={s.novosProdutosIcon}>🆕</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.novosProdutosTitle}>
+                {colibriNovos!.count} produto(s) novo(s) no Colibri
+              </Text>
+              <Text style={s.novosProdutosSub}>
+                {colibriNovos!.itens.slice(0, 2).map(i => i.colibriNome).join(', ')}
+                {colibriNovos!.count > 2 ? ` e mais ${colibriNovos!.count - 2}…` : ''}
+              </Text>
+            </View>
+            <Text style={s.novosProdutosArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={{ marginBottom: 16 }}>
           <BotaoColibriCarregar />
         </View>
@@ -244,6 +386,28 @@ const s = StyleSheet.create({
   openCaixaTitle: { fontSize: 15, fontWeight: '800', color: colors.primary },
   openCaixaSub: { fontSize: 12, color: colors.primaryDark, marginTop: 2 },
   openCaixaArrow: { fontSize: 24, color: colors.primary, fontWeight: '300' },
+
+  // Badge Colibri novos produtos
+  colibriHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
+  colibriHeaderTitle: { fontSize: 13, fontWeight: '700', color: colors.textSub, textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
+  badgeWrap: { backgroundColor: colors.danger, borderRadius: 10, minWidth: 20, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  badgeTxt: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  novosProdutosCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EEF6FF', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#3B82F6' },
+  novosProdutosIcon: { fontSize: 26 },
+  novosProdutosTitle: { fontSize: 13, fontWeight: '800', color: '#1D4ED8' },
+  novosProdutosSub: { fontSize: 11, color: '#3B82F6', marginTop: 2 },
+  novosProdutosArrow: { fontSize: 22, color: '#3B82F6' },
+  transfPendenteCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.infoLight, borderRadius: 14, padding: 14, marginBottom: 4, borderWidth: 1, borderColor: colors.info },
+  transfPendenteIcon: { fontSize: 26 },
+  transfPendenteTitle: { fontSize: 13, fontWeight: '800', color: colors.info },
+  transfPendenteSub: { fontSize: 11, color: colors.info, marginTop: 2 },
+  transfPendenteArrow: { fontSize: 22, color: colors.info },
+
+  semCargaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF3CD', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#FFC107' },
+  semCargaIcon: { fontSize: 26 },
+  semCargaTitle: { fontSize: 13, fontWeight: '800', color: '#7D5400' },
+  semCargaSub: { fontSize: 11, color: '#7D5400', marginTop: 2 },
+  semCargaArrow: { fontSize: 22, color: '#7D5400' },
 
   // Alerta produtos pendentes
   alertaRevisaoCard: {

@@ -2,14 +2,14 @@ import { z } from 'zod'
 
 const itemPedidoSchema = z.object({
   produtoId: z.string().uuid().optional(),
-  nomeProduto: z.string().min(1),
-  quantidade: z.coerce.number().positive(),
-  observacao: z.string().optional(),
+  nomeProduto: z.string().min(1).max(200),
+  quantidade: z.coerce.number().positive().max(99999),
+  observacao: z.string().max(500).optional(),
   urgente: z.boolean().default(false),
 })
 
 export const criarPedidoSchema = z.object({
-  itens: z.array(itemPedidoSchema).min(1, 'Pedido deve ter pelo menos 1 item'),
+  itens: z.array(itemPedidoSchema).min(1, 'Pedido deve ter pelo menos 1 item').max(100, 'Máximo 100 itens por pedido'),
 })
 
 export const atualizarStatusSchema = z.object({
@@ -17,9 +17,9 @@ export const atualizarStatusSchema = z.object({
 })
 
 export const editarPedidoSchema = z.object({
-  nomeProduto: z.string().min(1).optional(),
-  quantidade: z.coerce.number().positive().optional(),
-  observacao: z.string().optional(),
+  nomeProduto: z.string().min(1).max(200).optional(),
+  quantidade: z.coerce.number().positive().max(99999).optional(),
+  observacao: z.string().max(500).optional(),
   urgente: z.boolean().optional(),
 })
 

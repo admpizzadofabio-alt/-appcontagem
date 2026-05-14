@@ -17,7 +17,10 @@ import {
   useRascunhosPendentesQuery,
   useDecidirRascunhoMutation,
   useDashboardAdminQuery,
+  useRevisoesPendentesQuery,
+  useDecidirRevisaoMutation,
   type RascunhoEntrada,
+  type RevisaoPendente,
 } from '../../services/api/turnos'
 import { useListarCorrecoesQuery } from '../../services/api/correcoes'
 import { Card } from '../../components/Card'
@@ -26,18 +29,24 @@ import { EmptyState } from '../../components/EmptyState'
 import { SectionHeader } from '../../components/SectionHeader'
 import { colors } from '../../theme/colors'
 
-type Tab = 'perdas' | 'rascunhos' | 'correcoes' | 'movimentos' | 'metricas'
+type Tab = 'revisoes' | 'perdas' | 'rascunhos' | 'correcoes' | 'movimentos' | 'metricas'
 
 export function AdminScreen() {
-  const [tab, setTab] = useState<Tab>('rascunhos')
+  const [tab, setTab] = useState<Tab>('revisoes')
+  const { data: revisoes = [] } = useRevisoesPendentesQuery()
+  const { data: rascunhosBadge = [] } = useRascunhosPendentesQuery()
+  const { data: perdasBadge = [] } = useListarPendentesQuery()
+
+  function badge(n: number) { return n > 0 ? ` (${n})` : '' }
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       {/* Tab bar */}
-      <View style={s.tabBar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabBar} contentContainerStyle={s.tabBarContent}>
         {([
-          { key: 'rascunhos', label: 'Rascunhos' },
-          { key: 'perdas', label: 'Aprovações' },
+          { key: 'revisoes', label: `Revisões${badge(revisoes.length)}` },
+          { key: 'rascunhos', label: `Rascunhos${badge(rascunhosBadge.length)}` },
+          { key: 'perdas', label: `Aprovações${badge(perdasBadge.length)}` },
           { key: 'correcoes', label: 'Comandas' },
           { key: 'movimentos', label: 'Movimentos' },
           { key: 'metricas', label: 'Métricas' },
@@ -50,14 +59,160 @@ export function AdminScreen() {
             <Text style={[s.tabTxt, tab === t.key && s.tabTxtAtivo]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
+      {tab === 'revisoes' && <AbaRevisoesContent />}
       {tab === 'perdas' && <AbaPerdasContent />}
       {tab === 'rascunhos' && <AbaRascunhosContent />}
       {tab === 'correcoes' && <AbaCorrecoesContent />}
       {tab === 'movimentos' && <AbaMovimentosContent />}
       {tab === 'metricas' && <AbaMetricasContent />}
     </SafeAreaView>
+  )
+}
+
+// ─── Aba Revisões ───────────────────────────────────────────────────────────
+
+function AbaRevisoesContent() {
+  const { data: revisoes = [], isLoading } = useRevisoesPendentesQuery()
+  const [decidir] = useDecidirRevisaoMutation()
+  const [modalItem, setModalItem] = useState<RevisaoPendente | null>(null)
+  const [novaQtd, setNovaQtd] = useState('')
+  const [decisao, setDecisao] = useState('')
+
+  async function handleAcao(acao: 'aceitar' | 'ajustar' | 'perda' | 'recontagem') {
+    if (!modalItem) return
+    try {
+      const params: any = { id: modalItem.id, acao, decisao: decisao.trim() || undefined }
+      if (acao === 'ajustar') {
+        const n = parseFloat(novaQtd)
+        if (Number.isNaN(n) || n < 0) {
+          Alert.alert('Atenção', 'Informe uma quantidade válida')
+          return
+        }
+        params.novaQuantidade = n
+      }
+      await decidir(params).unwrap()
+      setModalItem(null)
+      setNovaQtd('')
+      setDecisao('')
+    } catch (e: any) {
+      Alert.alert('Erro', e.message)
+    }
+  }
+
+  if (isLoading) return <EmptyState icon="⏳" title="Carregando..." />
+
+  return (
+    <ScrollView style={s.scroll} contentContainerStyle={s.content}>
+      <SectionHeader title={`Revisões pendentes (${revisoes.length})`} />
+      <Text style={s.hintTxt}>
+        Itens com divergência grande ou venda Colibri sem estoque. Decida a ação para cada um.
+      </Text>
+
+      {revisoes.length === 0 ? (
+        <EmptyState icon="✅" title="Nenhuma revisão pendente" />
+      ) : (
+        revisoes.map((r) => {
+          const isPerda = r.diferenca < 0
+          return (
+            <TouchableOpacity key={r.id} onPress={() => { setModalItem(r); setNovaQtd(String(r.quantidadeContada)) }} activeOpacity={0.8}>
+              <Card style={[s.revisaoCard, isPerda ? s.revisaoCardPerda : s.revisaoCardSobra]}>
+                <View style={s.revisaoHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.revisaoNome}>{r.produto.nomeBebida}</Text>
+                    <Text style={s.revisaoLocal}>{r.contagem.local} · {new Date(r.contagem.dataContagem).toLocaleDateString('pt-BR')}</Text>
+                  </View>
+                  <View style={[s.diffBubble, isPerda ? s.diffBubblePerda : s.diffBubbleSobra]}>
+                    <Text style={[s.diffNum, { color: isPerda ? colors.danger : colors.warning }]}>
+                      {r.diferenca > 0 ? '+' : ''}{r.diferenca}
+                    </Text>
+                  </View>
+                </View>
+                <View style={s.revisaoStats}>
+                  <View style={s.revisaoStatCol}>
+                    <Text style={s.revisaoStatLabel}>Sistema</Text>
+                    <Text style={s.revisaoStatNum}>{r.quantidadeSistema}</Text>
+                  </View>
+                  <View style={s.revisaoStatSep} />
+                  <View style={s.revisaoStatCol}>
+                    <Text style={s.revisaoStatLabel}>Contado</Text>
+                    <Text style={s.revisaoStatNum}>{r.quantidadeContada}</Text>
+                  </View>
+                  {(r.vendidoColibri ?? 0) > 0 && (
+                    <>
+                      <View style={s.revisaoStatSep} />
+                      <View style={s.revisaoStatCol}>
+                        <Text style={s.revisaoStatLabel}>Colibri</Text>
+                        <Text style={s.revisaoStatNum}>{r.vendidoColibri}</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+                {r.justificativa && (
+                  <View style={s.revisaoJustifBox}>
+                    <Text style={s.revisaoJustif}>💬 {r.justificativa}</Text>
+                  </View>
+                )}
+                <Text style={s.revisaoAcao}>👉 Toque para decidir</Text>
+              </Card>
+            </TouchableOpacity>
+          )
+        })
+      )}
+
+      <Modal visible={modalItem !== null} transparent animationType="slide">
+        <View style={s.overlay}>
+          <ScrollView style={s.modal}>
+            <Text style={s.modalTitle}>{modalItem?.produto.nomeBebida}</Text>
+            <Text style={s.modalSub}>
+              Sistema {modalItem?.quantidadeSistema} · Contado {modalItem?.quantidadeContada} · Dif {modalItem && modalItem.diferenca > 0 ? '+' : ''}{modalItem?.diferenca}
+            </Text>
+            {modalItem?.justificativa && (
+              <Text style={s.modalJustif}>Operador: "{modalItem.justificativa}"</Text>
+            )}
+
+            <Text style={s.fieldLabel}>Decisão (opcional)</Text>
+            <TextInput
+              style={s.input}
+              value={decisao}
+              onChangeText={setDecisao}
+              placeholder="Comentário da revisão"
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+
+            <Text style={s.fieldLabel}>Nova quantidade (se ajuste)</Text>
+            <TextInput
+              style={s.input}
+              value={novaQtd}
+              onChangeText={setNovaQtd}
+              keyboardType="numeric"
+              placeholder="Quantidade ajustada"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <View style={{ gap: 8, marginTop: 16 }}>
+              <Pressable style={[s.acaoBtn, { backgroundColor: colors.success }]} onPress={() => handleAcao('aceitar')}>
+                <Text style={s.acaoBtnTxt}>✓ Aceitar contagem (estoque vai pra {modalItem?.quantidadeContada})</Text>
+              </Pressable>
+              <Pressable style={[s.acaoBtn, { backgroundColor: colors.primary }]} onPress={() => handleAcao('ajustar')}>
+                <Text style={s.acaoBtnTxt}>✏️ Ajustar para nova qtd ({novaQtd})</Text>
+              </Pressable>
+              <Pressable style={[s.acaoBtn, { backgroundColor: colors.warning }]} onPress={() => handleAcao('perda')}>
+                <Text style={s.acaoBtnTxt}>📉 Registrar como perda</Text>
+              </Pressable>
+              <Pressable style={[s.acaoBtn, { backgroundColor: colors.textMuted }]} onPress={() => handleAcao('recontagem')}>
+                <Text style={s.acaoBtnTxt}>🔄 Pedir recontagem</Text>
+              </Pressable>
+              <Pressable style={s.btnCancelar} onPress={() => setModalItem(null)}>
+                <Text style={s.btnCancelarTxt}>Cancelar</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    </ScrollView>
   )
 }
 
@@ -349,7 +504,7 @@ const TIPO_COLOR: Record<string, string> = {
   CargaInicial: colors.success,
 }
 
-type PeriodoFiltro = 'hoje' | 'semana' | 'mes' | 'todos'
+type PeriodoFiltro = 'hoje' | 'ontem' | 'semana' | 'mes' | 'todos' | 'data'
 type VistaFiltro = 'produto' | 'cronologico'
 type TipoFiltro = 'todos' | 'Entrada' | 'AjustePerda' | 'Transferencia' | 'Saida' | 'CargaInicial'
 
@@ -373,6 +528,9 @@ function AbaMovimentosContent() {
   const [vista, setVista] = useState<VistaFiltro>('produto')
   const [busca, setBusca] = useState('')
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
+  const [dataCustom, setDataCustom] = useState('')
+  const [dataInput, setDataInput] = useState('')
+  const [dataModal, setDataModal] = useState(false)
   const [detalheModal, setDetalheModal] = useState<Movimentacao | null>(null)
   const [corrModal, setCorrModal] = useState<Movimentacao | null>(null)
   const [qtdCorreta, setQtdCorreta] = useState('')
@@ -390,6 +548,10 @@ function AbaMovimentosContent() {
     return movimentos.filter((m) => {
       const data = new Date(m.dataMov)
       if (periodo === 'hoje' && data.toDateString() !== hoje.toDateString()) return false
+      if (periodo === 'ontem') {
+        const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1)
+        if (data.toDateString() !== ontem.toDateString()) return false
+      }
       if (periodo === 'semana') {
         const limite = new Date(hoje); limite.setDate(hoje.getDate() - 7)
         if (data < limite) return false
@@ -398,11 +560,16 @@ function AbaMovimentosContent() {
         const limite = new Date(hoje); limite.setDate(hoje.getDate() - 30)
         if (data < limite) return false
       }
+      if (periodo === 'data' && dataCustom) {
+        const [dd, mm, yyyy] = dataCustom.split('/').map(Number)
+        const alvo = new Date(yyyy, mm - 1, dd)
+        if (!isNaN(alvo.getTime()) && data.toDateString() !== alvo.toDateString()) return false
+      }
       if (tipoFiltro !== 'todos' && m.tipoMov !== tipoFiltro) return false
       if (busca && !m.produto.nomeBebida.toLowerCase().includes(busca.toLowerCase())) return false
       return true
     })
-  }, [movimentos, periodo, tipoFiltro, busca])
+  }, [movimentos, periodo, tipoFiltro, busca, dataCustom])
 
   const hojeTotal = useMemo(() => movimentos.filter((m) => new Date(m.dataMov).toDateString() === hoje.toDateString()).length, [movimentos])
   const alertasGrandes = useMemo(() => movimentosFiltrados.filter((m) => m.tipoMov === 'AjustePerda' && m.quantidade > m.produto.perdaThreshold), [movimentosFiltrados])
@@ -599,11 +766,19 @@ function AbaMovimentosContent() {
 
         {/* Período */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipsRow}>
-          {([['hoje', 'Hoje'], ['semana', '7 dias'], ['mes', '30 dias'], ['todos', 'Todos']] as [PeriodoFiltro, string][]).map(([v, l]) => (
+          {([['hoje', 'Hoje'], ['ontem', 'Ontem'], ['semana', '7 dias'], ['mes', '30 dias'], ['todos', 'Todos']] as [PeriodoFiltro, string][]).map(([v, l]) => (
             <TouchableOpacity key={v} style={[s.chip, periodo === v && s.chipAtivo]} onPress={() => setPeriodo(v)}>
               <Text style={[s.chipTxt, periodo === v && s.chipTxtAtivo]}>{l}</Text>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={[s.chip, periodo === 'data' && s.chipAtivo]}
+            onPress={() => { setDataInput(dataCustom); setDataModal(true) }}
+          >
+            <Text style={[s.chipTxt, periodo === 'data' && s.chipTxtAtivo]}>
+              📅 {periodo === 'data' && dataCustom ? dataCustom : 'Data'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Tipo */}
@@ -709,6 +884,38 @@ function AbaMovimentosContent() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal filtro por data */}
+      <Modal visible={dataModal} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.modal}>
+            <Text style={s.modalTitle}>📅 Filtrar por data</Text>
+            <Text style={s.fieldLabel}>Data (DD/MM/AAAA)</Text>
+            <TextInput
+              style={[s.input, { minHeight: 48, textAlignVertical: 'center' }]}
+              value={dataInput}
+              onChangeText={setDataInput}
+              placeholder="11/05/2026"
+              keyboardType="numeric"
+              maxLength={10}
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+            <View style={s.modalAcoes}>
+              <Pressable style={s.btnCancelar} onPress={() => setDataModal(false)}>
+                <Text style={s.btnCancelarTxt}>Cancelar</Text>
+              </Pressable>
+              <Pressable style={[s.btnConfirmar, { backgroundColor: colors.primary }]} onPress={() => {
+                setDataCustom(dataInput)
+                setPeriodo('data')
+                setDataModal(false)
+              }}>
+                <Text style={s.btnConfirmarTxt}>Aplicar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   )
 }
@@ -808,11 +1015,12 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 32 },
 
-  tabBar: { flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabBtnAtivo: { borderBottomColor: colors.primary },
-  tabTxt: { fontSize: 12, fontWeight: '600', color: colors.textSub },
-  tabTxtAtivo: { color: colors.primary, fontWeight: '700' },
+  tabBar: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, maxHeight: 48 },
+  tabBarContent: { flexDirection: 'row', alignItems: 'stretch' },
+  tabBtn: { paddingVertical: 13, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', minWidth: 100 },
+  tabBtnAtivo: { borderBottomColor: colors.primary, backgroundColor: colors.accentLight },
+  tabTxt: { fontSize: 13, fontWeight: '600', color: colors.textSub },
+  tabTxtAtivo: { color: colors.primary, fontWeight: '800' },
 
   cardEntrada: { gap: 8, borderLeftWidth: 4, borderLeftColor: colors.success },
   cardWarning: { gap: 8, borderLeftWidth: 4, borderLeftColor: colors.warning },
@@ -843,6 +1051,31 @@ const s = StyleSheet.create({
   modal: { backgroundColor: colors.surface, borderRadius: 20, padding: 24, gap: 12 },
   modalTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
   modalSub: { fontSize: 13, color: colors.textSub },
+  modalJustif: { fontSize: 13, color: colors.text, fontStyle: 'italic', backgroundColor: colors.surfaceAlt, padding: 10, borderRadius: 8 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSub, marginTop: 8, marginBottom: 4 },
+
+  // Revisões
+  hintTxt: { fontSize: 12, color: colors.textSub, marginBottom: 8, fontStyle: 'italic' },
+  revisaoCard: { gap: 10, marginBottom: 8 },
+  revisaoCardPerda: { borderLeftWidth: 4, borderLeftColor: colors.danger },
+  revisaoCardSobra: { borderLeftWidth: 4, borderLeftColor: colors.warning },
+  revisaoHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  revisaoNome: { fontSize: 15, fontWeight: '800', color: colors.text },
+  revisaoLocal: { fontSize: 12, color: colors.textSub, marginTop: 2 },
+  diffBubble: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', minWidth: 56 },
+  diffBubblePerda: { backgroundColor: colors.dangerLight },
+  diffBubbleSobra: { backgroundColor: colors.warningLight },
+  diffNum: { fontSize: 22, fontWeight: '900', lineHeight: 26 },
+  revisaoStats: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: 12, gap: 0 },
+  revisaoStatCol: { flex: 1, alignItems: 'center', gap: 4 },
+  revisaoStatLabel: { fontSize: 11, fontWeight: '600', color: colors.textSub, textTransform: 'uppercase' },
+  revisaoStatNum: { fontSize: 18, fontWeight: '800', color: colors.text },
+  revisaoStatSep: { width: 1, backgroundColor: colors.border, marginVertical: 4 },
+  revisaoJustifBox: { backgroundColor: colors.warningLight, borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.warning },
+  revisaoJustif: { fontSize: 12, color: colors.text, fontStyle: 'italic' },
+  revisaoAcao: { fontSize: 12, color: colors.primary, fontWeight: '700', textAlign: 'right' },
+  acaoBtn: { padding: 14, borderRadius: 12, alignItems: 'center' },
+  acaoBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
   input: {
     borderWidth: 1, borderColor: colors.border, borderRadius: 12,
     padding: 12, fontSize: 14, color: colors.text,

@@ -1,8 +1,10 @@
 import { z } from 'zod'
 
+// Mesmo regex usado em auth.schemas.ts — garante que admin não consegue criar
+// usuário com PIN em formato diferente do que o login aceita.
 export const criarUsuarioSchema = z.object({
-  nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
-  pin: z.string().min(4).max(8),
+  nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').max(100),
+  pin: z.string().regex(/^\d{6}$/, 'PIN deve ter exatamente 6 dígitos'),
   setor: z.enum(['Bar', 'Delivery', 'Admin', 'Todos']),
   nivelAcesso: z.enum(['Operador', 'Supervisor', 'Admin']),
 })

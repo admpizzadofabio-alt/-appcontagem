@@ -25,5 +25,16 @@ module.exports = {
         NODE_ENV: 'production',
       },
     },
+    // Backup diário foi movido pro cron interno em jobs.ts (roda às 02h).
+    // Mantém comentado aqui caso queira usar PM2 ao invés do interno:
+    // {
+    //   name: 'appcontagem-backup',
+    //   script: 'node_modules/.bin/tsx',
+    //   args: 'prisma/backup.ts',
+    //   autorestart: false,
+    //   cron_restart: '0 2 * * *',
+    //   watch: false,
+    //   env_production: { NODE_ENV: 'production' },
+    // },
   ],
 }

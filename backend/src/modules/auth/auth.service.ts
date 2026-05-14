@@ -1,12 +1,9 @@
-import bcrypt from 'bcryptjs'
+import argon2 from 'argon2'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { UnauthorizedError } from '../../shared/errors.js'
-
-const MAX_ATTEMPTS = 5
-const LOCKOUT_MINUTES = 15
 
 function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso: string) {
   const payload = { sub: usuarioId, nome, setor, nivelAcesso }
@@ -15,75 +12,40 @@ function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso
   return { accessToken, refreshToken }
 }
 
-async function registrarFalha(usuarioId: string) {
-  const u = await prisma.usuario.update({
-    where: { id: usuarioId },
-    data: { loginAttempts: { increment: 1 } },
-    select: { loginAttempts: true },
-  })
-  if (u.loginAttempts >= MAX_ATTEMPTS) {
-    await prisma.usuario.update({
-      where: { id: usuarioId },
-      data: { bloqueadoAte: new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) },
+// Hash dummy lazy: argon2id de string aleatória, gerado uma vez na primeira chamada.
+// Usado em timing-equalization quando a lista de usuários ativos está vazia.
+let dummyHashCache: string | null = null
+async function getDummyHash(): Promise<string> {
+  if (!dummyHashCache) {
+    dummyHashCache = await argon2.hash('__dummy_never_a_valid_pin__', {
+      type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1,
     })
   }
+  return dummyHashCache
 }
 
 export async function login(pin: string) {
-  const pinSha256 = crypto.createHash('sha256').update(pin).digest('hex')
+  // Modelo PIN-only: itera todos os usuários ativos e verifica argon2id.
+  // Proteção contra brute-force: rate limit por IP (10/15min) + global (300/15min) — em app.ts e auth.routes.ts.
+  //
+  // Notas de timing:
+  // - PIN errado: itera todos os N usuários (sempre roda N argon2.verify) — tempo previsível
+  // - PIN correto: itera até encontrar (1..N argon2.verify) — pode revelar posição na lista,
+  //   mas explorável só se atacante já conhece um PIN válido (cenário improvável neste modelo)
+  // - Banco vazio (0 usuários): rodaria em ~5ms, vazando "instalação fresca"
+  //   → mitigado abaixo com 1 argon2.verify dummy para igualar ao tempo mínimo de uma instalação real
+  const usuarios = await prisma.usuario.findMany({ where: { ativo: true } })
 
-  // Busca por formato: plaintext e sha256 permitem lookup direto por valor
-  let usuario =
-    await prisma.usuario.findFirst({ where: { pinFormat: 'sha256', pin: pinSha256, ativo: true } }) ??
-    await prisma.usuario.findFirst({ where: { pinFormat: 'plaintext', pin, ativo: true } })
-
-  // Usuários bcrypt: precisa carregar e comparar (sem atalho possível)
-  if (!usuario) {
-    const bcryptUsers = await prisma.usuario.findMany({ where: { pinFormat: 'bcrypt', ativo: true } })
-    for (const u of bcryptUsers) {
-      if (await bcrypt.compare(pin, u.pin)) { usuario = u; break }
-    }
+  if (usuarios.length === 0) {
+    await argon2.verify(await getDummyHash(), pin).catch(() => false)
+    throw new UnauthorizedError('PIN inválido')
   }
 
+  let usuario = null
+  for (const u of usuarios) {
+    if (await argon2.verify(u.pin, pin)) { usuario = u; break }
+  }
   if (!usuario) throw new UnauthorizedError('PIN inválido')
-
-  // Verificar bloqueio
-  if (usuario.bloqueadoAte && usuario.bloqueadoAte > new Date()) {
-    const minutos = Math.ceil((usuario.bloqueadoAte.getTime() - Date.now()) / 60000)
-    throw new UnauthorizedError(`Conta bloqueada. Tente novamente em ${minutos} minuto(s).`)
-  }
-
-  // PIN errado após encontrar usuário (bcrypt pode ter falso match — não acontece, mas garante reset)
-  // Verifica se o PIN bate de verdade antes de prosseguir
-  let pinValido = false
-  if (usuario.pinFormat === 'bcrypt') {
-    pinValido = await bcrypt.compare(pin, usuario.pin)
-  } else if (usuario.pinFormat === 'sha256') {
-    pinValido = usuario.pin === pinSha256
-  } else {
-    pinValido = usuario.pin === pin
-  }
-
-  if (!pinValido) {
-    await registrarFalha(usuario.id)
-    const restantes = MAX_ATTEMPTS - (usuario.loginAttempts + 1)
-    if (restantes > 0) {
-      throw new UnauthorizedError(`PIN inválido. ${restantes} tentativa(s) restante(s).`)
-    }
-    throw new UnauthorizedError(`Conta bloqueada por ${LOCKOUT_MINUTES} minutos.`)
-  }
-
-  // Login bem-sucedido — resetar contador
-  await prisma.usuario.update({
-    where: { id: usuario.id },
-    data: { loginAttempts: 0, bloqueadoAte: null },
-  })
-
-  // Migração automática para bcrypt ao fazer login
-  if (usuario.pinFormat !== 'bcrypt') {
-    const bcryptHash = await bcrypt.hash(pin, 12)
-    await prisma.usuario.update({ where: { id: usuario.id }, data: { pin: bcryptHash, pinFormat: 'bcrypt' } })
-  }
 
   const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso)
 
@@ -107,9 +69,8 @@ export async function login(pin: string) {
 }
 
 export async function refresh(refreshToken: string) {
-  let payload: any
   try {
-    payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET)
+    jwt.verify(refreshToken, env.JWT_REFRESH_SECRET)
   } catch {
     throw new UnauthorizedError('Refresh token inválido')
   }

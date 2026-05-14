@@ -12,6 +12,8 @@ export type Produto = {
   setorPadrao: string
   revisadoAdmin: boolean
   ativo: boolean
+  marcoInicialEm?: string | null
+  imagem?: string | null // base64 ou URL — exibir thumbnail em contagem/cadastro
 }
 
 export const produtosApi = baseApi.injectEndpoints({
@@ -36,8 +38,12 @@ export const produtosApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/produtos/${id}/excluir`, method: 'DELETE' }),
       invalidatesTags: ['Produtos'],
     }),
+    cargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; quantidade: number; local: 'Bar' | 'Delivery'; observacao?: string }>({
+      query: ({ id, ...data }) => ({ url: `/produtos/${id}/carga-inicial`, method: 'POST', data }),
+      invalidatesTags: ['Produtos', 'Estoque', 'Movimentacoes'],
+    }),
   }),
   overrideExisting: false,
 })
 
-export const { useListarProdutosQuery, useCriarProdutoMutation, useAtualizarProdutoMutation, useDeletarProdutoMutation, useExcluirProdutoMutation } = produtosApi
+export const { useListarProdutosQuery, useCriarProdutoMutation, useAtualizarProdutoMutation, useDeletarProdutoMutation, useExcluirProdutoMutation, useCargaInicialMutation } = produtosApi

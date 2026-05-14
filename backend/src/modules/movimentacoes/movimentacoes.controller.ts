@@ -5,6 +5,10 @@ import * as service from './movimentacoes.service.js'
 export async function listarHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const filtros = filtrosMovimentacaoSchema.parse(req.query)
+    const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
+    if (!isPrivileged && (req.user!.setor === 'Bar' || req.user!.setor === 'Delivery')) {
+      filtros.local = req.user!.setor
+    }
     res.json(await service.listar(filtros))
   } catch (err) { next(err) }
 }

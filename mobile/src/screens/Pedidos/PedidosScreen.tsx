@@ -27,9 +27,12 @@ export function PedidosScreen() {
 
   const [showForm, setShowForm] = useState(false)
   const [nomeProduto, setNomeProduto] = useState('')
+  const [produtoIdSel, setProdutoIdSel] = useState<string | undefined>()
   const [quantidade, setQuantidade] = useState('')
   const [urgente, setUrgente] = useState(false)
   const [observacao, setObservacao] = useState('')
+  const [showPicker, setShowPicker] = useState(false)
+  const [buscaPicker, setBuscaPicker] = useState('')
 
   const [editando, setEditando] = useState<Pedido | null>(null)
   const [editNome, setEditNome] = useState('')
@@ -71,13 +74,17 @@ export function PedidosScreen() {
     const qtd = parseFloat(quantidade)
     if (!qtd) return Alert.alert('Atenção', 'Informe a quantidade.')
     try {
-      await criar({ itens: [{ nomeProduto, quantidade: qtd, urgente, observacao: observacao || undefined }] }).unwrap()
-      setNomeProduto(''); setQuantidade(''); setUrgente(false); setObservacao(''); setShowForm(false)
+      await criar({ itens: [{ produtoId: produtoIdSel, nomeProduto, quantidade: qtd, urgente, observacao: observacao || undefined }] }).unwrap()
+      setNomeProduto(''); setProdutoIdSel(undefined); setQuantidade(''); setUrgente(false); setObservacao(''); setShowForm(false)
       Alert.alert('Pedido criado!', 'Seu pedido foi registrado.')
     } catch (e: any) {
       Alert.alert('Erro', e.message)
     }
   }
+
+  const produtosFiltradosPicker = (produtos as any[]).filter((p) =>
+    p.nomeBebida.toLowerCase().includes(buscaPicker.toLowerCase())
+  )
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
@@ -88,7 +95,12 @@ export function PedidosScreen() {
         {showForm && (
           <Card style={s.form}>
             <Text style={s.formTitle}>Novo Pedido de Compra</Text>
-            <TextInput style={s.input} placeholder="Nome do produto *" placeholderTextColor={colors.textMuted} value={nomeProduto} onChangeText={setNomeProduto} />
+            <TouchableOpacity style={s.pickerBtn} onPress={() => { setBuscaPicker(''); setShowPicker(true) }}>
+              <Text style={nomeProduto ? s.pickerBtnTxt : s.pickerBtnPlaceholder}>
+                {nomeProduto || 'Selecionar produto *'}
+              </Text>
+              <Text style={s.pickerArrow}>›</Text>
+            </TouchableOpacity>
             <TextInput style={s.input} placeholder="Quantidade *" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" value={quantidade} onChangeText={setQuantidade} />
             <TextInput style={[s.input, { height: 70 }]} placeholder="Observação (opcional)" placeholderTextColor={colors.textMuted} multiline value={observacao} onChangeText={setObservacao} />
             <TouchableOpacity style={[s.urgenteBtn, urgente && s.urgenteActive]} onPress={() => setUrgente(!urgente)}>
@@ -113,8 +125,8 @@ export function PedidosScreen() {
             {p.observacao && <Text style={s.pedidoObs}>{p.observacao}</Text>}
             {isSup && p.status === 'Pendente' && (
               <View style={s.acoes}>
-                <ActionButton label="Em Análise" onPress={() => atualizar({ id: p.id, status: 'EmAnalise' })} variant="secondary" style={{ flex: 1 }} />
-                <ActionButton label="Atendido" onPress={() => atualizar({ id: p.id, status: 'Atendido' })} style={{ flex: 1 }} />
+                <ActionButton label="✅ Atendido" onPress={() => atualizar({ id: p.id, status: 'Atendido' })} style={{ flex: 1 }} />
+                <ActionButton label="Cancelar" onPress={() => atualizar({ id: p.id, status: 'Cancelado' })} variant="secondary" style={{ flex: 1 }} />
               </View>
             )}
             {isAdmin && (
@@ -130,6 +142,44 @@ export function PedidosScreen() {
           </Card>
         ))}
       </ScrollView>
+
+      {/* Modal seletor de produto */}
+      <Modal visible={showPicker} transparent animationType="slide">
+        <View style={s.overlay}>
+          <View style={[s.modal, { maxHeight: '80%' }]}>
+            <Text style={s.modalTitle}>Selecionar produto</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Buscar..."
+              placeholderTextColor={colors.textMuted}
+              value={buscaPicker}
+              onChangeText={setBuscaPicker}
+              autoFocus
+            />
+            <ScrollView style={{ marginTop: 8 }} nestedScrollEnabled>
+              {produtosFiltradosPicker.map((p: any) => (
+                <Pressable
+                  key={p.id}
+                  style={[s.pickerItem, produtoIdSel === p.id && s.pickerItemAtivo]}
+                  onPress={() => {
+                    setNomeProduto(p.nomeBebida)
+                    setProdutoIdSel(p.id)
+                    setShowPicker(false)
+                  }}
+                >
+                  <Text style={[s.pickerItemTxt, produtoIdSel === p.id && s.pickerItemTxtAtivo]}>
+                    {p.nomeBebida}
+                  </Text>
+                  <Text style={s.pickerItemSub}>{p.categoria} · {p.setorPadrao}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={[s.btnCancelar, { marginTop: 8 }]} onPress={() => setShowPicker(false)}>
+              <Text style={s.btnCancelarTxt}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={editando !== null} transparent animationType="slide">
         <View style={s.overlay}>
@@ -163,6 +213,15 @@ const s = StyleSheet.create({
   form: { gap: 10 },
   formTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: 10, paddingHorizontal: 14, height: 44, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  pickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: 10, paddingHorizontal: 14, height: 44, borderWidth: 1, borderColor: colors.border },
+  pickerBtnTxt: { flex: 1, fontSize: 14, color: colors.text },
+  pickerBtnPlaceholder: { flex: 1, fontSize: 14, color: colors.textMuted },
+  pickerArrow: { fontSize: 20, color: colors.textMuted },
+  pickerItem: { paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  pickerItemAtivo: { backgroundColor: colors.accentLight, borderRadius: 8, paddingHorizontal: 8 },
+  pickerItemTxt: { fontSize: 14, fontWeight: '600', color: colors.text },
+  pickerItemTxtAtivo: { color: colors.primary },
+  pickerItemSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   urgenteBtn: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   urgenteActive: { backgroundColor: colors.warningLight, borderColor: colors.warning },
   urgenteText: { fontWeight: '600', color: colors.textSub },

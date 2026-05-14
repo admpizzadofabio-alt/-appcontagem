@@ -15,11 +15,14 @@ import { TransferenciaScreen } from '../screens/Transferencia/TransferenciaScree
 import { PedidosScreen } from '../screens/Pedidos/PedidosScreen'
 import { RelatoriosScreen } from '../screens/Relatorios/RelatoriosScreen'
 import { AdminScreen } from '../screens/Admin/AdminScreen'
+import { AnalyticsScreen } from '../screens/Admin/AnalyticsScreen'
+import { Setup2FAScreen } from '../screens/Admin/Setup2FAScreen'
+import { AuditoriaScreen } from '../screens/Admin/AuditoriaScreen'
 import { UsuariosScreen } from '../screens/Usuarios/UsuariosScreen'
 import { ProdutosScreen } from '../screens/Produtos/ProdutosScreen'
 import { ColibriScreen } from '../screens/Colibri/ColibriScreen'
 import { RequisicoesScreen } from '../screens/Requisicoes/RequisicoesScreen'
-import { AbrirCaixaScreen } from '../screens/Turno/AbrirCaixaScreen'
+import { AbrirTurnoScreen } from '../screens/Turno/AbrirTurnoScreen'
 import { ContagemTurnoScreen } from '../screens/Turno/ContagemTurnoScreen'
 import { ResumoContagemScreen } from '../screens/Turno/ResumoContagemScreen'
 import { ErroComandaScreen } from '../screens/Turno/ErroComandaScreen'
@@ -80,10 +83,13 @@ function AppNavigator() {
 <AppStack.Screen name="Pedidos" component={PedidosScreen} options={{ title: 'Pedidos de Compra' }} />
       <AppStack.Screen name="Relatorios" component={RelatoriosScreen} options={{ title: 'Relatórios' }} />
       <AppStack.Screen name="Admin" component={AdminScreen} options={{ title: 'Painel Admin' }} />
+      <AppStack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics & Export' }} />
+      <AppStack.Screen name="Setup2FA" component={Setup2FAScreen} options={{ title: 'Autenticação 2 Fatores' }} />
+      <AppStack.Screen name="Auditoria" component={AuditoriaScreen} options={{ title: 'Logs de Auditoria' }} />
       <AppStack.Screen name="Usuarios" component={UsuariosScreen} options={{ title: 'Usuários' }} />
       <AppStack.Screen name="Produtos" component={ProdutosScreen} options={{ title: 'Produtos' }} />
       <AppStack.Screen name="Colibri" component={ColibriScreen} options={{ title: 'Integração Colibri POS' }} />
-      <AppStack.Screen name="AbrirCaixa" component={AbrirCaixaScreen} options={{ title: 'Abrir Turno' }} />
+      <AppStack.Screen name="AbrirTurno" component={AbrirTurnoScreen} options={{ title: 'Abrir Turno' }} />
       <AppStack.Screen name="ContagemTurno" component={ContagemTurnoScreen} options={{ title: 'Contagem' }} />
       <AppStack.Screen name="ResumoContagem" component={ResumoContagemScreen} options={{ title: 'Resumo da Contagem' }} />
       <AppStack.Screen name="ErroComanda" component={ErroComandaScreen} options={{ title: 'Erro de Comanda' }} />

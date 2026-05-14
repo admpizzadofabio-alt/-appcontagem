@@ -131,24 +131,30 @@ describe('rejeitarSchema', () => {
 // ── Segurança: Login ────────────────────────────────────────────────────────
 
 describe('loginSchema', () => {
-  it('aceita PIN de 4 dígitos', () => {
-    expect(loginSchema.safeParse({ pin: '1234' }).success).toBe(true)
+  it('aceita PIN de 6 dígitos', () => {
+    expect(loginSchema.safeParse({ pin: '123456' }).success).toBe(true)
   })
-  it('aceita PIN de 8 dígitos', () => {
-    expect(loginSchema.safeParse({ pin: '12345678' }).success).toBe(true)
+  it('rejeita PIN de 4 dígitos (formato antigo)', () => {
+    expect(loginSchema.safeParse({ pin: '1234' }).success).toBe(false)
   })
-  it('rejeita PIN com menos de 4 chars', () => {
-    expect(loginSchema.safeParse({ pin: '123' }).success).toBe(false)
+  it('rejeita PIN de 5 dígitos', () => {
+    expect(loginSchema.safeParse({ pin: '12345' }).success).toBe(false)
   })
-  it('rejeita PIN com mais de 8 chars', () => {
-    expect(loginSchema.safeParse({ pin: '123456789' }).success).toBe(false)
+  it('rejeita PIN de 7 dígitos', () => {
+    expect(loginSchema.safeParse({ pin: '1234567' }).success).toBe(false)
+  })
+  it('rejeita PIN com letras', () => {
+    expect(loginSchema.safeParse({ pin: 'abcdef' }).success).toBe(false)
+  })
+  it('rejeita PIN com espaços', () => {
+    expect(loginSchema.safeParse({ pin: '12 345' }).success).toBe(false)
   })
   it('rejeita PIN ausente', () => {
     expect(loginSchema.safeParse({}).success).toBe(false)
   })
   it('rejeita payload com campos extras (injeção)', () => {
     // Zod por padrão strip campos extras, não deve causar problema
-    const r = loginSchema.safeParse({ pin: '1234', extra: 'DROP TABLE usuarios' })
+    const r = loginSchema.safeParse({ pin: '123456', extra: 'DROP TABLE usuarios' })
     expect(r.success).toBe(true)
     if (r.success) expect((r.data as any).extra).toBeUndefined()
   })

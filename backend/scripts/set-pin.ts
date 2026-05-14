@@ -1,5 +1,7 @@
-import bcrypt from 'bcryptjs'
+import argon2 from 'argon2'
 import { prisma } from '../src/config/prisma.js'
+
+const ARGON2_OPTIONS = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 }
 
 const userId = process.argv[2]
 const novoPin = process.argv[3]
@@ -21,12 +23,12 @@ if (!u) {
   process.exit(1)
 }
 
-const hash = await bcrypt.hash(novoPin, 12)
+const hash = await argon2.hash(novoPin, ARGON2_OPTIONS)
 await prisma.usuario.update({
   where: { id: userId },
   data: {
     pin: hash,
-    pinFormat: 'bcrypt',
+    pinFormat: 'argon2id',
     loginAttempts: 0,
     bloqueadoAte: null,
   },

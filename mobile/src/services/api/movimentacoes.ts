@@ -35,7 +35,7 @@ export type TransferenciaPendente = {
   quantidade: number
   localOrigem: string
   localDestino: string
-  produto: { nomeBebida: string; unidadeMedida: string }
+  produto: { nomeBebida: string; unidadeMedida: string; setorPadrao: string }
   usuario: { nome: string }
 }
 
@@ -57,7 +57,7 @@ export type AprovacaoPendente = {
 
 export const movimentacoesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
-    listarMovimentacoes: build.query<Movimentacao[], { produtoId?: string; tipoMov?: string; local?: string } | void>({
+    listarMovimentacoes: build.query<Movimentacao[], { produtoId?: string; tipoMov?: string; local?: string; dataInicio?: string; dataFim?: string } | void>({
       query: (params) => ({ url: '/movimentacoes', params: params ?? {} }),
       providesTags: ['Movimentacoes'],
     }),

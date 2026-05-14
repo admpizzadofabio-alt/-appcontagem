@@ -1,6 +1,7 @@
 import { env } from '../../config/env.js'
 
 type ColibriSaleItem = {
+  idItemVenda: number | string // ID único da venda no Colibri — usado para dedup
   codMaterial: number | string
   codMaterialStr: string
   descricao: string
@@ -9,6 +10,7 @@ type ColibriSaleItem = {
   codGrupo: number | null
   grupoNome: string | null
   atendenteNome: string | null
+  timestampLancamento: string | null // "YYYY-MM-DD HH:MM:SS" hora local Brasília
 }
 
 type ColibriPageResponse = {
@@ -20,10 +22,12 @@ type ColibriPageResponse = {
 }
 
 export interface ColibriItemVenda {
+  idItemVenda: string // ID único — usado para dedupe entre imports
   productCode: string
   productName: string
   quantitySold: number
   groupName: string
+  timestamp: Date | null // momento exato da venda (hora local Brasília → UTC)
 }
 
 export interface ColibriProdutoCatalogo {
@@ -176,28 +180,23 @@ async function fetchAllItems(dtinicio: string, dtfim: string): Promise<ColibriSa
 export async function fetchVendas(dataInicio: string, dataFim: string): Promise<ColibriItemVenda[]> {
   const items = await fetchAllItems(dataInicio, dataFim)
 
-  // Filtra só bebidas e agrupa por código
-  const grouped = new Map<string, ColibriItemVenda>()
-
+  // Retorna 1 entrada POR VENDA (não agrupa) — preserva timestamp para
+  // filtragem por marco inicial. Agregação fica para a camada de service.
+  const result: ColibriItemVenda[] = []
   for (const i of items) {
     if (!i.grupoNome) continue
     if (!GRUPOS_BEBIDAS_NORM.has(normalizeGroup(i.grupoNome))) continue
 
-    const code = String(i.codMaterial)
-    const existing = grouped.get(code)
-    if (existing) {
-      existing.quantitySold += i.quantidade
-    } else {
-      grouped.set(code, {
-        productCode: code,
-        productName: i.descricao,
-        quantitySold: i.quantidade,
-        groupName: i.grupoNome,
-      })
-    }
+    result.push({
+      idItemVenda: String(i.idItemVenda),
+      productCode: String(i.codMaterial),
+      productName: i.descricao,
+      quantitySold: i.quantidade,
+      groupName: i.grupoNome,
+      timestamp: i.timestampLancamento ? new Date(i.timestampLancamento.replace(' ', 'T') + '-03:00') : null,
+    })
   }
-
-  return Array.from(grouped.values())
+  return result
 }
 
 export async function fetchCatalogo(): Promise<ColibriProdutoCatalogo[]> {

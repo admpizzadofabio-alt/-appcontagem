@@ -39,29 +39,29 @@ export function ResumoContagemScreen() {
   const [modoRascunho, setModoRascunho] = useState(false)
 
   const itens = contagem?.itens ?? []
-  const ok = itens.filter((i) => i.divergenciaCategoria === 'ok' || (i.contadoPor && i.diferenca === 0))
+  const semMovimento = itens.filter((i) => i.divergenciaCategoria === 'ok' && i.quantidadeSistema === 0 && i.quantidadeContada === 0)
+  const ok = itens.filter((i) => i.divergenciaCategoria === 'ok' && (i.quantidadeSistema > 0 || i.quantidadeContada > 0))
   const leves = itens.filter((i) => i.divergenciaCategoria === 'leve')
   const grandes = itens.filter((i) => i.divergenciaCategoria === 'grande')
-  const grandesPendentes = grandes.filter((i) => !i.fotoEvidencia)
+  const vendasSemEstoque = itens.filter(
+    (i) => (i.vendidoColibri ?? 0) > 0 && i.quantidadeContada < (i.vendidoColibri ?? 0) && i.divergenciaCategoria !== 'grande',
+  )
+  const pendentesJustificativa = [...leves, ...grandes, ...vendasSemEstoque].filter((i) => !i.justificativa)
 
   if (isLoading || !contagem) {
     return <SafeAreaView style={s.safe}><ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} /></SafeAreaView>
   }
 
   async function tirarFoto() {
+    // Só câmera — galeria removida pra evitar reuso de fotos antigas e garantir
+    // que toda evidência seja capturada no momento (auditoria/anti-fraude).
     const perm = await ImagePicker.requestCameraPermissionsAsync()
     if (!perm.granted) {
       Alert.alert('Permissão negada', 'Permita o uso da câmera nas configurações')
       return
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.6,
-      base64: true,
-    })
-    if (!result.canceled && result.assets[0]?.base64) {
-      setFoto(`data:image/jpeg;base64,${result.assets[0].base64}`)
-    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true })
+    if (!result.canceled && result.assets[0]?.base64) setFoto(`data:image/jpeg;base64,${result.assets[0].base64}`)
   }
 
   function abrirItemModal(item: ItemContagem) {
@@ -77,6 +77,11 @@ export function ResumoContagemScreen() {
   async function salvarFotoEJustif() {
     if (!itemModal || !justif.trim()) {
       Alert.alert('Atenção', 'Justificativa obrigatória')
+      return
+    }
+    const isQuebraPerda = justif.startsWith('Quebra ou perda')
+    if (isQuebraPerda && !foto) {
+      Alert.alert('Foto obrigatória', 'Quebra ou perda exige foto da evidência (garrafa quebrada, produto danificado etc.)')
       return
     }
     try {
@@ -122,13 +127,14 @@ export function ResumoContagemScreen() {
   }
 
   async function handleFinalizar() {
-    if (grandesPendentes.length > 0) {
-      Alert.alert('Atenção', `${grandesPendentes.length} divergência(s) grande(s) sem justificativa`)
+    if (pendentesJustificativa.length > 0) {
+      Alert.alert('Atenção', `${pendentesJustificativa.length} item(s) sem justificativa`)
       return
     }
+    const totalRevisao = grandes.length + vendasSemEstoque.length
     Alert.alert(
       'Finalizar contagem',
-      `Confirmar?\n• ${ok.length} produtos OK\n• ${leves.length} ajustes leves automáticos\n• ${grandes.length} divergências grandes vão para Admin`,
+      `Confirmar?\n• ${ok.length} conferidos\n• ${semMovimento.length} sem movimento\n• ${leves.length} ajustes leves automáticos\n• ${totalRevisao} vão para revisão Admin`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -162,29 +168,52 @@ export function ResumoContagemScreen() {
           <View style={s.statsRow}>
             <View style={s.stat}>
               <Text style={[s.statNum, { color: colors.success }]}>{ok.length}</Text>
-              <Text style={s.statLabel}>OK</Text>
+              <Text style={s.statLabel}>Conferidos</Text>
+            </View>
+            <View style={s.stat}>
+              <Text style={[s.statNum, { color: colors.textMuted }]}>{semMovimento.length}</Text>
+              <Text style={s.statLabel}>Sem mov.</Text>
             </View>
             <View style={s.stat}>
               <Text style={[s.statNum, { color: colors.warning }]}>{leves.length}</Text>
               <Text style={s.statLabel}>Leves</Text>
             </View>
             <View style={s.stat}>
-              <Text style={[s.statNum, { color: colors.danger }]}>{grandes.length}</Text>
-              <Text style={s.statLabel}>Grandes</Text>
+              <Text style={[s.statNum, { color: colors.danger }]}>{grandes.length + vendasSemEstoque.length}</Text>
+              <Text style={s.statLabel}>Revisão</Text>
             </View>
           </View>
         </Card>
 
-        {leves.length > 0 && (
+        {ok.length > 0 && (
           <>
-            <Text style={s.section}>🟡 Divergências leves (ajuste automático)</Text>
-            {leves.map((it) => (
+            <Text style={s.section}>✅ Conferidos sem divergência ({ok.length})</Text>
+            {ok.map((it) => (
               <Card key={it.id} style={s.itemCard}>
                 <Text style={s.itemNome}>{it.produto.nomeBebida}</Text>
-                <Text style={s.itemDiff}>
-                  Esperado: {it.quantidadeSistema} · Contado: {it.quantidadeContada} · Dif: {it.diferenca > 0 ? '+' : ''}{it.diferenca}
+                <Text style={[s.itemDiff, { color: colors.success }]}>
+                  Sistema {it.quantidadeSistema} = Contado {it.quantidadeContada}
                 </Text>
               </Card>
+            ))}
+          </>
+        )}
+
+        {leves.length > 0 && (
+          <>
+            <Text style={s.section}>🟡 Divergências leves (justificativa obrigatória)</Text>
+            {leves.map((it) => (
+              <TouchableOpacity key={it.id} onPress={() => abrirItemModal(it)} disabled={contagem.status === 'Fechada'}>
+                <Card style={[s.itemCard, !it.justificativa && contagem.status !== 'Fechada' && s.itemPendente] as any}>
+                  <Text style={s.itemNome}>{it.produto.nomeBebida}</Text>
+                  <Text style={s.itemDiff}>
+                    Esperado: {it.quantidadeSistema} · Contado: {it.quantidadeContada} · Dif: {it.diferenca > 0 ? '+' : ''}{it.diferenca}
+                  </Text>
+                  <Text style={[s.itemAcao, it.justificativa && { color: colors.success }]}>
+                    {it.justificativa ? '✓ Justificativa salva' : '✏️ Toque para justificar'}
+                  </Text>
+                </Card>
+              </TouchableOpacity>
             ))}
           </>
         )}
@@ -193,14 +222,33 @@ export function ResumoContagemScreen() {
           <>
             <Text style={s.section}>🔴 Divergências grandes (justificativa obrigatória)</Text>
             {grandes.map((it) => (
-              <TouchableOpacity key={it.id} onPress={() => abrirItemModal(it)}>
-                <Card style={[s.itemCard, !it.fotoEvidencia && s.itemPendente] as any}>
+              <TouchableOpacity key={it.id} onPress={() => abrirItemModal(it)} disabled={contagem.status === 'Fechada'}>
+                <Card style={[s.itemCard, !it.justificativa && contagem.status !== 'Fechada' && s.itemPendente] as any}>
                   <Text style={s.itemNome}>{it.produto.nomeBebida}</Text>
                   <Text style={s.itemDiff}>
                     Esperado: {it.quantidadeSistema} · Contado: {it.quantidadeContada} · Dif: {it.diferenca > 0 ? '+' : ''}{it.diferenca}
                   </Text>
-                  <Text style={[s.itemAcao, it.fotoEvidencia && { color: colors.success }]}>
-                    {it.fotoEvidencia ? '✓ Justificativa salva' : '✏️ Toque para justificar'}
+                  <Text style={[s.itemAcao, it.justificativa && { color: colors.success }]}>
+                    {it.justificativa ? '✓ Justificativa salva' : '✏️ Toque para justificar'}
+                  </Text>
+                </Card>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
+
+        {vendasSemEstoque.length > 0 && (
+          <>
+            <Text style={s.section}>🟠 Vendidas no Colibri sem estoque (justifique e segue para Admin)</Text>
+            {vendasSemEstoque.map((it) => (
+              <TouchableOpacity key={it.id} onPress={() => abrirItemModal(it)} disabled={contagem.status === 'Fechada'}>
+                <Card style={[s.itemCard, !it.justificativa && s.itemPendente] as any}>
+                  <Text style={s.itemNome}>{it.produto.nomeBebida}</Text>
+                  <Text style={s.itemDiff}>
+                    Vendido Colibri: {it.vendidoColibri ?? 0} · Contado: {it.quantidadeContada} · Estoque sistema: {it.quantidadeSistema}
+                  </Text>
+                  <Text style={[s.itemAcao, it.justificativa && { color: colors.success }]}>
+                    {it.justificativa ? '✓ Justificativa salva — Admin revisará' : '✏️ Toque para justificar'}
                   </Text>
                 </Card>
               </TouchableOpacity>
@@ -228,11 +276,13 @@ export function ResumoContagemScreen() {
 
         <View style={{ height: 12 }} />
 
-        <ActionButton
-          label={finalizando ? 'Finalizando...' : 'Confirmar e abrir turno'}
-          onPress={handleFinalizar}
-          disabled={finalizando || grandesPendentes.length > 0}
-        />
+        {contagem.status !== 'Fechada' && (
+          <ActionButton
+            label={finalizando ? 'Finalizando...' : 'Confirmar e abrir turno'}
+            onPress={handleFinalizar}
+            disabled={finalizando || pendentesJustificativa.length > 0}
+          />
+        )}
       </ScrollView>
 
       <Modal visible={itemModal !== null} transparent animationType="slide">
@@ -260,7 +310,9 @@ export function ResumoContagemScreen() {
               </View>
             )}
 
-            <Text style={s.fieldLabel}>📸 Foto (opcional)</Text>
+            <Text style={s.fieldLabel}>
+              📸 Foto {justif.startsWith('Quebra ou perda') ? '(obrigatória)' : '(opcional)'}
+            </Text>
             {foto && <Image source={{ uri: foto }} style={s.fotoPreview} />}
             <TouchableOpacity style={s.fotoBtn} onPress={tirarFoto}>
               <Text style={s.fotoBtnTxt}>{foto ? '🔄 Tirar outra foto' : '📷 Tirar foto'}</Text>
@@ -292,12 +344,43 @@ export function ResumoContagemScreen() {
               </>
             ) : (
               <>
+                <Text style={s.fieldLabel}>Categoria (toque para selecionar)</Text>
+                <View style={s.chipsRow}>
+                  {[
+                    { key: 'erro_contagem', label: 'Erro de contagem' },
+                    { key: 'venda_sem_estoque', label: 'Venda sem estoque' },
+                    { key: 'possivel_desvio', label: 'Possível desvio' },
+                    { key: 'quebra_perda', label: 'Quebra/perda' },
+                    { key: 'outro', label: 'Outro' },
+                  ].map((c) => {
+                    const labelMap: Record<string, string> = {
+                      erro_contagem: 'Erro de contagem ao abrir o turno',
+                      venda_sem_estoque: 'Vendido no Colibri sem estoque físico',
+                      possivel_desvio: 'Suspeita de desvio/furto',
+                      quebra_perda: 'Quebra ou perda não registrada',
+                      outro: '',
+                    }
+                    const ativo = justif.startsWith(labelMap[c.key]) || (c.key === 'outro' && !Object.values(labelMap).slice(0, -1).some((v) => justif.startsWith(v)))
+                    return (
+                      <TouchableOpacity
+                        key={c.key}
+                        style={[s.chip, ativo && s.chipAtivo]}
+                        onPress={() => {
+                          if (c.key === 'outro') setJustif('')
+                          else setJustif(labelMap[c.key])
+                        }}
+                      >
+                        <Text style={[s.chipTxt, ativo && s.chipTxtAtivo]}>{c.label}</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
                 <Text style={s.fieldLabel}>Justificativa *</Text>
                 <TextInput
                   style={s.input}
                   value={justif}
                   onChangeText={setJustif}
-                  placeholder="Ex: 5 garrafas quebradas no estoque"
+                  placeholder="Detalhe brevemente..."
                   placeholderTextColor={colors.textMuted}
                   multiline
                 />
@@ -354,6 +437,11 @@ const s = StyleSheet.create({
   fotoBtn: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', backgroundColor: colors.accentLight },
   fotoBtnTxt: { fontSize: 13, fontWeight: '700', color: colors.primary },
   hint: { fontSize: 11, color: colors.warning, marginTop: 8, fontStyle: 'italic' },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  chipAtivo: { borderColor: colors.primary, backgroundColor: colors.accentLight },
+  chipTxt: { fontSize: 12, color: colors.textSub },
+  chipTxtAtivo: { color: colors.primary, fontWeight: '700' },
 
   modalAcoes: { flexDirection: 'row', gap: 10, marginTop: 16, marginBottom: 8 },
   btnCancelar: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },

@@ -1,0 +1,10 @@
+MODE: BUILD
+
+POLICIES:
+- MINIMAL_DIFF
+- PERFORMANCE_FIRST
+
+OUTPUT:
+1. Plan
+2. Implementation
+3. Validation

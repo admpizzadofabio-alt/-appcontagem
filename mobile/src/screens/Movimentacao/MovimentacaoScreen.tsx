@@ -42,9 +42,16 @@ export function MovimentacaoScreen() {
     { skip: tipo !== 'AjustePerda' },
   )
 
-  const produtosFiltrados = produtos.filter((p) =>
-    p.nomeBebida.toLowerCase().includes(busca.toLowerCase())
-  )
+  const produtosFiltrados = produtos
+    .filter((p) => p.nomeBebida.toLowerCase().includes(busca.toLowerCase()))
+    // Carga Inicial: ordena os sem-marco primeiro (badge visual abaixo identifica os já carregados)
+    .sort((a, b) => {
+      if (tipo !== 'CargaInicial') return 0
+      const aMarco = !!a.marcoInicialEm
+      const bMarco = !!b.marcoInicialEm
+      if (aMarco === bMarco) return a.nomeBebida.localeCompare(b.nomeBebida)
+      return aMarco ? 1 : -1
+    })
   const produtoSelecionado = produtos.find((p) => p.id === produtoId)
 
   const qtdNum = parseFloat(quantidade)
@@ -92,6 +99,21 @@ export function MovimentacaoScreen() {
     if (!qtd || qtd <= 0) return Alert.alert('Atenção', 'Informe a quantidade.')
     if (tipo === 'AjustePerda' && !motivo) return Alert.alert('Atenção', 'Informe o motivo da perda.')
     if (tipo === 'AjustePerda' && !fotoPerda) return Alert.alert('Atenção', 'Foto da perda é obrigatória.')
+
+    // Carga Inicial após 9h: avisa que vendas anteriores ficarão zumbis (marco bloqueia)
+    if (tipo === 'CargaInicial' && new Date().getHours() >= 9) {
+      const continuar = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          '⚠️ Atenção — horário tardio',
+          'Vendas Colibri anteriores a esta hora NÃO serão descontadas (o marco inicial bloqueia).\n\nRecomendado: carga antes das 9h, antes do expediente.',
+          [
+            { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Continuar mesmo assim', style: 'destructive', onPress: () => resolve(true) },
+          ],
+        )
+      })
+      if (!continuar) return
+    }
 
     // Anti-duplicação só em entradas normais (não carga inicial)
     if (tipo === 'Entrada') {
@@ -148,13 +170,26 @@ export function MovimentacaoScreen() {
           <Text style={s.sectionTitle}>Produto</Text>
           <TextInput style={s.input} placeholder="Buscar produto..." placeholderTextColor={colors.textMuted} value={busca} onChangeText={setBusca} />
           <ScrollView style={s.list} nestedScrollEnabled>
-            {produtosFiltrados.map((p) => (
-              <View key={p.id} style={[s.prodItem, produtoId === p.id && s.prodItemActive]}>
-                <Text style={[s.prodName, produtoId === p.id && { color: '#fff' }]} onPress={() => { setProdutoId(p.id); setBusca(p.nomeBebida) }}>
-                  {p.nomeBebida}
-                </Text>
-              </View>
-            ))}
+            {produtosFiltrados.map((p) => {
+              const jaCarregado = tipo === 'CargaInicial' && !!p.marcoInicialEm
+              const ativo = produtoId === p.id
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[s.prodItem, ativo && s.prodItemActive, jaCarregado && !ativo && { opacity: 0.55 }]}
+                  onPress={() => { setProdutoId(p.id); setBusca(p.nomeBebida) }}
+                >
+                  <Text style={[s.prodName, ativo && { color: '#fff' }, { flex: 1 }]}>
+                    {p.nomeBebida}
+                  </Text>
+                  {jaCarregado && (
+                    <Text style={{ fontSize: 11, color: ativo ? '#fff' : colors.success, fontWeight: '700' }}>
+                      ✓ carregado
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
           </ScrollView>
         </Card>
 
@@ -316,7 +351,7 @@ const s = StyleSheet.create({
   inputLarge: { backgroundColor: colors.surfaceAlt, borderRadius: 10, paddingHorizontal: 14, height: 72, fontSize: 32, fontWeight: '700', color: colors.text, textAlign: 'center', borderWidth: 1, borderColor: colors.border },
   unit: { textAlign: 'center', color: colors.textSub, marginTop: 6, fontSize: 13 },
   list: { maxHeight: 180 },
-  prodItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 4 },
+  prodItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 },
   prodItemActive: { backgroundColor: colors.primary },
   prodName: { fontSize: 14, color: colors.text, fontWeight: '500' },
   tabs: { flexDirection: 'row', gap: 8 },

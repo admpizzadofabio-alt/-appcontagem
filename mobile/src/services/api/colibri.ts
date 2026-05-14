@@ -38,6 +38,7 @@ export type ImportarVendasResult = {
   status?: 'ok' | 'parcial' | 'aguardando' | 'em_andamento' | 'sem_periodo'
   dataInicio?: string
   dataFim?: string
+  produtosAtualizados?: Array<{ nome: string; quantidade: number; local: string }>
 }
 
 export type UltimaImportacao = {
@@ -50,6 +51,8 @@ export type UltimaImportacao = {
   totalImportados: number
   totalIgnorados: number
   status: string
+  stale: boolean
+  horasDesde: number | null
 } | null
 
 export type ColibriStatus = {
@@ -81,6 +84,11 @@ export type ImportarProdutosResult = {
   criados: number
   ignorados: number
   detalhes: string[]
+}
+
+export type ColibriNovos = {
+  count: number
+  itens: { colibriCode: string; colibriNome: string; grupo: string }[]
 }
 
 export const colibriApi = baseApi.injectEndpoints({
@@ -123,9 +131,9 @@ export const colibriApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/colibri/catalogo/${id}`, method: 'DELETE' }),
       invalidatesTags: ['ColibriCatalogo'],
     }),
-    importarProdutosColibri: build.mutation<ImportarProdutosResult, void>({
-      query: () => ({ url: '/colibri/produtos', method: 'POST' }),
-      invalidatesTags: ['Produtos', 'ColibriMapeamentos'],
+    importarProdutosColibri: build.mutation<ImportarProdutosResult, { colibriCodes: string[] }>({
+      query: (data) => ({ url: '/colibri/produtos', method: 'POST', data }),
+      invalidatesTags: ['Produtos', 'ColibriMapeamentos', 'ColibriCatalogo'],
     }),
     importarPendente: build.mutation<ImportarVendasResult, void>({
       query: () => ({ url: '/colibri/importar-pendente', method: 'POST' }),
@@ -134,6 +142,14 @@ export const colibriApi = baseApi.injectEndpoints({
     ultimaImportacao: build.query<UltimaImportacao, void>({
       query: () => ({ url: '/colibri/ultima-importacao' }),
       providesTags: ['ColibriUltimaImportacao'],
+    }),
+    colibriNovos: build.query<ColibriNovos, void>({
+      query: () => ({ url: '/colibri/novos' }),
+      providesTags: ['ColibriCatalogo'],
+    }),
+    marcarColibriVisto: build.mutation<{ ok: boolean }, void>({
+      query: () => ({ url: '/colibri/novos/marcar-vistos', method: 'PATCH' }),
+      invalidatesTags: ['ColibriCatalogo'],
     }),
   }),
   overrideExisting: false,
@@ -153,4 +169,6 @@ export const {
   useImportarProdutosColibriMutation,
   useImportarPendenteMutation,
   useUltimaImportacaoQuery,
+  useColibriNovosQuery,
+  useMarcarColibriVistoMutation,
 } = colibriApi

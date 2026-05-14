@@ -1,10 +1,11 @@
 # =========================================================================
-# 🚀 ECONOMIA DE TOKENS: ARQUIVO DE IGNORAÇÃO DO CLAUDE
-# Mantenha este arquivo na raiz do projeto APPCONTAGEM.
-# Impede a IA de ler arquivos inúteis, economizando tokens.
+# 🚀 ECONOMIA DE TOKENS: .claudeignore OTIMIZADO (APPCONTAGEM)
+# Expansão técnica: exclui mais gerados, binaries, logs, caches e arquivos de build Expo/Prisma.
+# Inclui arquivos legados específicos do projeto para otimização máxima.
+# Não afeta leitura explícita via @file.
 # =========================================================================
 
-# Dependências e Builds (Padrão FET)
+# === Dependências e Builds (já existente — mantido) ===
 node_modules
 **/node_modules/
 *.lock
@@ -14,30 +15,124 @@ package-lock.json
 **/.expo/
 **/.prisma/
 
+# === Arquivos Específicos do Projeto APPCONTAGEM (Legado Mantido) ===
 # Ícones e Imagens PWA
 icons/
-*.png
-*.jpg
-*.jpeg
-*.svg
-*.ico
-*.gif
-
 # Arquivos de Teste isolados não relevantes ao núcleo
 test_buttons.py
 gerar-icones.html
-
 # Assets Estáticos e Configurações Fechadas (Que a IA não deve alterar)
 manifest.json
 
-# Metadados de Git e IDE
-.vscode/
-.idea/
-.git/
+# === Expansões específicas para stack RN + Node + Prisma + Express ===
+# Builds Expo / EAS
+.expo/
+eas.json
+**/.expo-shared/
+**/*.jsbundle
+**/*.hbc
 
-# Backups, Temporários e Sistema
-backup/
-*.bak
+# Prisma gerados e caches
+prisma/migrations/**/*.sql          # migrations longas (leia sob demanda)
+**/.prisma/client/                  # client gerado grande
+**/*.db                             # SQLite dev se usado
+
+# Logs, temporários e caches
+*.log
+**/*.log
+logs/
+tmp/
+temp/
 *.tmp
+*.bak
 .DS_Store
 Thumbs.db
+
+# Env e secrets (crítico para segurança + tokens)
+.env*
+!.env.example
+secrets/
+**/*.pem
+**/*.key
+
+# Testes, coverage e snapshots (irrelevantes para maioria das tasks)
+coverage/
+**/__tests__/
+**/__snapshots__/
+*.test.ts
+*.spec.ts
+
+# Assets grandes e estáticos (imagens, ícones — já parcial)
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.svg
+**/*.ico
+**/*.gif
+**/*.mp4
+**/*.mov
+
+# Outros gerados / vendor
+**/.vscode/          # exceto se quiser configs específicas
+**/.idea/
+**/*.tsbuildinfo
+**/.cache/
+**/*.sqlite
+**/*.sqlite3
+
+# Ignorar pastas de backup ou dev temporárias
+backup/
+**/*.bak
+**/*.tmp
+
+# === Otimizações Avançadas Claude Code 2026 ===
+
+# Claude próprio e caches
+**/.claude/**
+!**/.claudeignore
+!.claude/memory/MEMORY.md
+
+**/.claude/skills/**
+**/.claude/agents/**
+**/.claude/hooks/**
+**/.claude/cache/**
+**/.claude/memory/*   # exceto MEMORY.md
+
+# Outros caches
+**/.cursor/
+**/.windsurf/
+**/*.history
+**/*.session
+**/.cache/
+**/*.tsbuildinfo
+
+# Arquivos grandes desnecessários
+prisma/migrations/**/*.sql
+**/.prisma/client/**
+**/*.log
+**/coverage/
+**/__tests__/
+**/__snapshots__/
+
+# === Nível 2 - Otimizações Avançadas ===
+
+# Arquivos de IA e memória (evitar auto-leitura)
+**/*.md
+!.claude/memory/MEMORY.md
+!CLAUDE.md
+!CONVENTIONS.md
+!PROMPT_INICIAL.md
+
+# Builds e caches pesados do Expo
+**/.expo/**/*
+**/*.map
+**/*.bundle
+
+# Node.js específicos
+**/.npm/
+**/*.tgz
+**/yarn.lock
+
+# Ignorar pastas de testes e stories
+**/*.stories.tsx
+**/__mocks__/
