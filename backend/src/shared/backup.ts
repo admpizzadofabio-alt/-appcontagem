@@ -40,6 +40,7 @@ export async function criarBackup(): Promise<string> {
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const arquivo = path.join(BACKUP_DIR, `backup-${ts}.json`)
   fs.writeFileSync(arquivo, JSON.stringify(backup, null, 2), 'utf-8')
+  fs.chmodSync(arquivo, 0o600)
   logger.info({ arquivo }, 'Backup criado')
   return arquivo
 }

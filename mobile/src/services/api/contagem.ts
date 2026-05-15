@@ -55,7 +55,7 @@ export const contagemApi = baseApi.injectEndpoints({
     }),
     processarContagem: build.mutation<ResultadoProcessamento, string>({
       query: (id) => ({ url: `/contagem/${id}/processar`, method: 'POST' }),
-      invalidatesTags: ['Contagem', 'Estoque'],
+      invalidatesTags: ['Contagem', 'Estoque', 'Movimentacoes'],
     }),
     cancelarContagem: build.mutation<void, string>({
       query: (id) => ({ url: `/contagem/${id}`, method: 'DELETE' }),

@@ -341,6 +341,14 @@ export async function finalizarContagem(contagemId: string, operadorId: string, 
       const isVendaSemEstoque = item.vendidoColibri > 0 && item.quantidadeContada < item.vendidoColibri
       const precisaRevisao = item.divergenciaCategoria === 'grande' || isVendaSemEstoque
 
+      // Sempre marca ultimaContagemEm + quantidade no estoqueAtual (POR LOCAL) — mesmo se bateu certo
+      if (item.divergenciaCategoria === 'ok' && !precisaRevisao) {
+        await tx.estoqueAtual.updateMany({
+          where: { produtoId: item.produtoId, local: contagem.local },
+          data: { ultimaContagemEm: new Date(), ultimaContagemQuantidade: item.quantidadeContada },
+        })
+      }
+
       if (item.divergenciaCategoria !== 'ok' || precisaRevisao) {
         const produto = await tx.produto.findUnique({ where: { id: item.produtoId } })
         const valor = Math.abs(item.diferenca) * (produto?.custoUnitario ?? 0)
@@ -405,13 +413,17 @@ export async function finalizarContagem(contagemId: string, operadorId: string, 
         // marco congela até decisão. Isso impede que divergências reais sumam do radar.
         const produtoMarco = await tx.produto.findUnique({ where: { id: item.produtoId }, select: { marcoInicialEm: true } })
         const podeAvancarMarco = !precisaRevisao && produtoMarco?.marcoInicialEm
-        await tx.produto.update({
-          where: { id: item.produtoId },
-          data: {
-            ultimaContagemEm: new Date(),
-            ...(podeAvancarMarco ? { marcoInicialEm: new Date() } : {}),
-          },
+        // ultimaContagem por local (estoqueAtual); marcoInicialEm continua por produto
+        await tx.estoqueAtual.updateMany({
+          where: { produtoId: item.produtoId, local: contagem.local },
+          data: { ultimaContagemEm: new Date(), ultimaContagemQuantidade: item.quantidadeContada },
         })
+        if (podeAvancarMarco) {
+          await tx.produto.update({
+            where: { id: item.produtoId },
+            data: { marcoInicialEm: new Date() },
+          })
+        }
       }
     }
 

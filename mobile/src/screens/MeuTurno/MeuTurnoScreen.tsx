@@ -128,6 +128,9 @@ export function MeuTurnoScreen() {
                         Aberto às {fmtHora(contagem.dataAbertura)}
                         {contagem.dataFechamento ? ` · Fechado às ${fmtHora(contagem.dataFechamento)}` : ' · Em aberto'}
                       </Text>
+                      {contagem.operador && (
+                        <Text style={s.statusOperador}>👤 Conferido por {contagem.operador}</Text>
+                      )}
                     </View>
                     <Badge
                       label={contagem.status}
@@ -352,6 +355,7 @@ const s = StyleSheet.create({
   statusRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   statusLocal:  { fontSize: 15, fontWeight: '700', color: colors.text },
   statusHora:   { fontSize: 12, color: colors.textSub, marginTop: 2 },
+  statusOperador: { fontSize: 12, color: colors.primary, fontWeight: '600', marginTop: 4 },
   contagemStats: { flexDirection: 'row', justifyContent: 'space-around' },
   statBox:      { alignItems: 'center', gap: 2 },
   statNum:      { fontSize: 24, fontWeight: '800' },

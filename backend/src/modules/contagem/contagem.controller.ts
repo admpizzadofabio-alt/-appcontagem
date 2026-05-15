@@ -1,13 +1,17 @@
 import { Request, Response, NextFunction } from 'express'
+import { z } from 'zod'
 import { NotFoundError } from '../../shared/errors.js'
 import { iniciarContagemSchema, salvarItemSchema } from './contagem.schemas.js'
 import * as service from './contagem.service.js'
 
+const localQuerySchema = z.enum(['Bar', 'Delivery']).optional()
+
 export async function listarHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    const local = localQuerySchema.parse(req.query.local)
     const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
     const operadorId = isPrivileged ? undefined : req.user!.sub
-    res.json(await service.listar(req.query.local as string, operadorId))
+    res.json(await service.listar(local, operadorId))
   } catch (err) { next(err) }
 }
 

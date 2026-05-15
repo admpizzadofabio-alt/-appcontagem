@@ -25,6 +25,10 @@ export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: axiosBaseQuery,
   keepUnusedDataFor: 60,
+  // Refetch automático quando tela ganha foco ou monta com dados antigos
+  refetchOnFocus: true,
+  refetchOnMountOrArgChange: true,
+  refetchOnReconnect: true,
   tagTypes: ['Estoque', 'Movimentacoes', 'Contagem', 'Pedidos', 'Produtos', 'Usuarios', 'Relatorios', 'ColibriMapeamentos', 'ColibriCatalogo', 'ColibriUltimaImportacao', 'Turno', 'Rascunhos', 'Correcoes', 'Revisoes'],
   endpoints: () => ({}),
 })

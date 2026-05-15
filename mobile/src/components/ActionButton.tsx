@@ -1,5 +1,6 @@
 import React from 'react'
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native'
+import * as Haptics from 'expo-haptics'
 import { colors } from '../theme/colors'
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -31,7 +32,7 @@ export function ActionButton({ label, onPress, variant = 'primary', loading, dis
         (disabled || loading) && styles.disabled,
         style,
       ]}
-      onPress={onPress}
+      onPress={() => { Haptics.impactAsync(variant === 'danger' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onPress() }}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >

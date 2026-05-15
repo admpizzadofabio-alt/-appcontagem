@@ -95,6 +95,7 @@ model Produto {
   imagem        String?
   criadoEm      DateTime @default(now())
   ultimaContagemEm DateTime?
+  ultimaContagemQuantidade Float? // último valor contado (para exibir na timeline)
   marcoInicialEm DateTime? // só descontar Colibri a partir desta data; null = produto não opera
 
   estoque          EstoqueAtual[]
@@ -113,6 +114,8 @@ model EstoqueAtual {
   quantidadeAtual Float    @default(0)
   atualizadoEm   DateTime @updatedAt
   atualizadoPor  String?
+  ultimaContagemEm        DateTime? // última vez que ESTE local foi contado
+  ultimaContagemQuantidade Float?    // valor contado nesta verificação
 
   produto         Produto  @relation(fields: [produtoId], references: [id])
 

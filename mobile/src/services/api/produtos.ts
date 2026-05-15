@@ -42,8 +42,12 @@ export const produtosApi = baseApi.injectEndpoints({
       query: ({ id, ...data }) => ({ url: `/produtos/${id}/carga-inicial`, method: 'POST', data }),
       invalidatesTags: ['Produtos', 'Estoque', 'Movimentacoes'],
     }),
+    resetarCargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; local: 'Bar' | 'Delivery' }>({
+      query: ({ id, local }) => ({ url: `/produtos/${id}/carga-inicial`, method: 'DELETE', data: { local } }),
+      invalidatesTags: ['Produtos', 'Estoque', 'Movimentacoes'],
+    }),
   }),
   overrideExisting: false,
 })
 
-export const { useListarProdutosQuery, useCriarProdutoMutation, useAtualizarProdutoMutation, useDeletarProdutoMutation, useExcluirProdutoMutation, useCargaInicialMutation } = produtosApi
+export const { useListarProdutosQuery, useCriarProdutoMutation, useAtualizarProdutoMutation, useDeletarProdutoMutation, useExcluirProdutoMutation, useCargaInicialMutation, useResetarCargaInicialMutation } = produtosApi

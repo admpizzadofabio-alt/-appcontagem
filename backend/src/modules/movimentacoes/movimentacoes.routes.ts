@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth, requireNivel } from '../../middlewares/auth.js'
-import { listarHandler, criarHandler, listarPendentesHandler, aprovarHandler, rejeitarHandler, listarTransferenciasPendentesHandler, confirmarTransferenciaHandler } from './movimentacoes.controller.js'
+import { listarHandler, criarHandler, listarPendentesHandler, aprovarHandler, rejeitarHandler, listarTransferenciasPendentesHandler, confirmarTransferenciaHandler, deletarHandler } from './movimentacoes.controller.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -14,5 +14,6 @@ router.get('/transferencias/pendentes', listarTransferenciasPendentesHandler)
 router.patch('/transferencias/:id/confirmar', confirmarTransferenciaHandler)
 router.patch('/aprovacoes/:id/aprovar', requireNivel(['Supervisor', 'Admin']), aprovarHandler)
 router.patch('/aprovacoes/:id/rejeitar', requireNivel(['Supervisor', 'Admin']), rejeitarHandler)
+router.delete('/:id', requireNivel(['Admin']), deletarHandler)
 
 export { router as movimentacoesRouter }

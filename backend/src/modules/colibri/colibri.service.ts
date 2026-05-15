@@ -236,7 +236,9 @@ export async function importarVendas(params: {
         try {
           const arr: string[] = JSON.parse(m.idItemVendasColibri)
           for (const id of arr) idsProcessados.add(id)
-        } catch {}
+        } catch {
+          // JSON malformado — ignora (não dedupa) ao invés de quebrar import
+        }
       }
 
       // Agrega vendas após dedup e marco, mantendo lista de idItemVendas por produto
@@ -458,13 +460,15 @@ export async function recuperarColibriStartup() {
   })
   if (!usuarioSistema) return
 
-  // Janela: últimos 7 dias até hoje (timezone local Brasília)
-  const seteDiasAtras = new Date()
-  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7)
+  // Janela: do dia da última importação bem-sucedida até hoje.
+  // Cap de 7 dias para evitar imports gigantescos se a última foi muito antiga.
+  const hoje = new Date()
+  const limiteSete = new Date(); limiteSete.setDate(hoje.getDate() - 7)
+  const inicio = ultima.dataFim > limiteSete ? ultima.dataFim : limiteSete
 
   return importarVendas({
-    dataInicio: formatLocalDate(seteDiasAtras),
-    dataFim: formatLocalDate(),
+    dataInicio: formatLocalDate(inicio),
+    dataFim: formatLocalDate(hoje),
     local: 'Bar',
     usuarioId: usuarioSistema.id,
     usuarioNome: `${usuarioSistema.nome} (recuperação startup, ${Math.floor(horasDesde)}h sem cron)`,

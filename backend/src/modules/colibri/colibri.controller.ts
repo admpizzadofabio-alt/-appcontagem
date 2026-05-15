@@ -49,7 +49,8 @@ export async function deleteMapeamento(req: Request, res: Response, next: NextFu
 export async function postImportar(req: Request, res: Response, next: NextFunction) {
   try {
     const { dataInicio, dataFim, local } = importarVendasSchema.parse(req.body)
-    const usuario = req.user!
+    const usuario = req.user
+    if (!usuario) return res.status(401).json({ error: 'Não autenticado' })
     const resultado = await importarVendas({
       dataInicio,
       dataFim,
@@ -104,7 +105,8 @@ export async function postImportarProdutos(req: Request, res: Response, next: Ne
 
 export async function postImportarPendente(req: Request, res: Response, next: NextFunction) {
   try {
-    const usuario = req.user!
+    const usuario = req.user
+    if (!usuario) return res.status(401).json({ error: 'Não autenticado' })
     const local = usuario.setor === 'Delivery' ? 'Delivery' : 'Bar'
     const resultado = await importarPendente({
       local,

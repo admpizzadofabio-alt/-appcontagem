@@ -65,3 +65,11 @@ export async function rejeitarHandler(req: Request, res: Response, next: NextFun
     res.status(200).json({ message: 'Rejeitado com sucesso' })
   } catch (err) { next(err) }
 }
+
+export async function deletarHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user || req.user.nivelAcesso !== 'Admin') return res.status(403).json({ error: 'Acesso negado' })
+    await service.deletarMovimentacao(String(req.params.id), req.user.sub, req.user.nome)
+    res.json({ ok: true, mensagem: 'Movimentação deletada e estoque revertido.' })
+  } catch (err) { next(err) }
+}

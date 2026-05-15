@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { UnauthorizedError } from '../../shared/errors.js'
+import { verifyTotp } from './totp.service.js'
 
 function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso: string) {
   const payload = { sub: usuarioId, nome, setor, nivelAcesso }
@@ -24,16 +25,10 @@ async function getDummyHash(): Promise<string> {
   return dummyHashCache
 }
 
-export async function login(pin: string) {
-  // Modelo PIN-only: itera todos os usuários ativos e verifica argon2id.
-  // Proteção contra brute-force: rate limit por IP (10/15min) + global (300/15min) — em app.ts e auth.routes.ts.
-  //
-  // Notas de timing:
-  // - PIN errado: itera todos os N usuários (sempre roda N argon2.verify) — tempo previsível
-  // - PIN correto: itera até encontrar (1..N argon2.verify) — pode revelar posição na lista,
-  //   mas explorável só se atacante já conhece um PIN válido (cenário improvável neste modelo)
-  // - Banco vazio (0 usuários): rodaria em ~5ms, vazando "instalação fresca"
-  //   → mitigado abaixo com 1 argon2.verify dummy para igualar ao tempo mínimo de uma instalação real
+export async function login(pin: string, totpCode?: string) {
+  const MAX_TOTP_ATTEMPTS = 5
+  const LOCKOUT_MINUTES = 15
+
   const usuarios = await prisma.usuario.findMany({ where: { ativo: true } })
 
   if (usuarios.length === 0) {
@@ -46,6 +41,42 @@ export async function login(pin: string) {
     if (await argon2.verify(u.pin, pin)) { usuario = u; break }
   }
   if (!usuario) throw new UnauthorizedError('PIN inválido')
+
+  // Verifica bloqueio (gerado por tentativas 2FA repetidas)
+  if (usuario.bloqueadoAte && usuario.bloqueadoAte > new Date()) {
+    const mins = Math.ceil((usuario.bloqueadoAte.getTime() - Date.now()) / 60000)
+    throw new UnauthorizedError(`Conta bloqueada. Tente novamente em ${mins} minuto(s).`)
+  }
+
+  // Enforce 2FA se habilitado
+  if (usuario.totpEnabled) {
+    if (!totpCode) throw new UnauthorizedError('Código 2FA obrigatório')
+    const valid = await verifyTotp(usuario.totpSecret!, totpCode)
+    if (!valid) {
+      const novasTentativas = (usuario.loginAttempts ?? 0) + 1
+      const bloquear = novasTentativas >= MAX_TOTP_ATTEMPTS
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: {
+          loginAttempts: novasTentativas,
+          ...(bloquear && { bloqueadoAte: new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) }),
+        },
+      })
+      throw new UnauthorizedError(
+        bloquear
+          ? `Conta bloqueada por ${LOCKOUT_MINUTES} minutos após múltiplas tentativas.`
+          : 'Código 2FA inválido'
+      )
+    }
+  }
+
+  // Reset tentativas após login bem-sucedido
+  if ((usuario.loginAttempts ?? 0) > 0 || usuario.bloqueadoAte) {
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { loginAttempts: 0, bloqueadoAte: null },
+    })
+  }
 
   const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso)
 

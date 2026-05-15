@@ -24,6 +24,8 @@ export async function listar(local?: string) {
         quantidadeAtual: estoque?.quantidadeAtual ?? 0,
         atualizadoPor: estoque?.atualizadoPor ?? null,
         atualizadoEm: estoque?.atualizadoEm ?? null,
+        ultimaContagemEm: estoque?.ultimaContagemEm ?? null,
+        ultimaContagemQuantidade: estoque?.ultimaContagemQuantidade ?? null,
         produto: produtoData,
       }
     })
@@ -48,6 +50,8 @@ export async function listar(local?: string) {
         quantidadeAtual: estoque?.quantidadeAtual ?? 0,
         atualizadoPor: estoque?.atualizadoPor ?? null,
         atualizadoEm: estoque?.atualizadoEm ?? null,
+        ultimaContagemEm: estoque?.ultimaContagemEm ?? null,
+        ultimaContagemQuantidade: estoque?.ultimaContagemQuantidade ?? null,
         produto: produtoData,
       })
     }

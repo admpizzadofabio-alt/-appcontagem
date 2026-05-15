@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useIsFocused } from '@react-navigation/native'
 import { useListarEstoqueQuery, useHistoricoEstoqueQuery, type EstoqueItem } from '../../services/api/estoque'
 import { EstoqueTimeline } from '../../components/EstoqueTimeline'
 import { useLocalAcesso } from '../../hooks/useLocalAcesso'
@@ -9,6 +10,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
+import { SkeletonList } from '../../components/Skeleton'
+import { AnimatedNumber } from '../../components/AnimatedNumber'
 import { SectionHeader } from '../../components/SectionHeader'
 import { colors } from '../../theme/colors'
 
@@ -35,7 +38,7 @@ function _renderExpandHoje(e: EstoqueItem, _todosItens: EstoqueItem[], isAdmin: 
           📊 Valor em estoque: R$ {(e.quantidadeAtual * e.produto.custoUnitario).toFixed(2)}
         </Text>
       )}
-      {!bloqueado && <EstoqueTimeline produtoId={e.produtoId} local={e.local} quantidadeAtual={e.quantidadeAtual} unidadeMedida={e.produto.unidadeMedida} data={data} />}
+      {!bloqueado && <EstoqueTimeline produtoId={e.produtoId} local={e.local} quantidadeAtual={e.quantidadeAtual} unidadeMedida={e.produto.unidadeMedida} data={data} ultimaContagemEm={(e as any).ultimaContagemEm} ultimaContagemQuantidade={(e as any).ultimaContagemQuantidade} />}
     </>
   )
 }
@@ -93,7 +96,13 @@ export function EstoqueScreen() {
     })
   }
   const efetivo = veTodosLocais ? local : localOperador
-  const { data = [], isLoading } = useListarEstoqueQuery(efetivo ? { local: efetivo } : undefined)
+  const isFocused = useIsFocused()
+  // Polling: enquanto tela ativa, refaz busca a cada 15s — captura mudanças por crons (Colibri) ou outros dispositivos
+  // A API já aplica RBAC + filtro de setor, então respeita as regras automaticamente
+  const { data = [], isLoading } = useListarEstoqueQuery(
+    efetivo ? { local: efetivo } : undefined,
+    { pollingInterval: isFocused ? 15000 : 0 },
+  )
 
   const filtrados = data.filter((e) =>
     e.produto.nomeBebida.toLowerCase().includes(busca.toLowerCase())
@@ -223,7 +232,7 @@ export function EstoqueScreen() {
 
         {/* ── View de hoje ────────────────────────────────────── */}
         {isHoje && <>
-        {isLoading && <EmptyState icon="⏳" title="Carregando..." />}
+        {isLoading && <SkeletonList count={4} />}
         {!isLoading && filtrados.length === 0 && <EmptyState icon="📭" title="Nenhum produto encontrado" />}
 
         {/* ── Alertas ─────────────────────────────────────────── */}
@@ -242,7 +251,7 @@ export function EstoqueScreen() {
                         <Text style={s.itemSub}>{e.produto.categoria} · {e.local} · Mín: {e.produto.estoqueMinimo} {e.produto.unidadeMedida}</Text>
                       </View>
                       <View style={s.itemRight}>
-                        <Text style={[s.itemQty, { color: colors.danger }]}>{e.quantidadeAtual}</Text>
+                        <AnimatedNumber value={e.quantidadeAtual} style={[s.itemQty, { color: colors.danger }]} />
                         <Badge label="Baixo" variant="danger" />
                       </View>
                       <Text style={s.chevron}>{aberto ? '▲' : '▼'}</Text>
@@ -275,7 +284,7 @@ export function EstoqueScreen() {
                         <Text style={s.itemSub}>{e.produto.categoria} · {e.local}</Text>
                       </View>
                       <View style={s.itemRight}>
-                        <Text style={s.itemQty}>{qtdBloqueada ? '🔒' : e.quantidadeAtual}</Text>
+                        {qtdBloqueada ? <Text style={s.itemQty}>🔒</Text> : <AnimatedNumber value={e.quantidadeAtual} style={s.itemQty} />}
                         {!qtdBloqueada && <Text style={s.itemUnit}>{e.produto.unidadeMedida}</Text>}
                       </View>
                       <Text style={s.chevron}>{aberto ? '▲' : '▼'}</Text>

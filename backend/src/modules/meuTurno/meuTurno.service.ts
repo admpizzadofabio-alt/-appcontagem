@@ -20,6 +20,7 @@ export async function getMeuTurno(usuarioId: string, setor: string) {
     ? await prisma.contagemEstoque.findUnique({
         where: { id: turno.contagemId },
         include: {
+          operador: { select: { nome: true } },
           itens: {
             include: {
               produto: { select: { nomeBebida: true, unidadeMedida: true } },
@@ -69,6 +70,7 @@ export async function getMeuTurno(usuarioId: string, setor: string) {
     dataFechamento:  contagem.dataFechamento,
     totalItens:      contagem.totalItens,
     totalDesvios:    contagem.totalDesvios,
+    operador:        contagem.operador?.nome ?? null,
     itens: contagem.itens.map((i) => ({
       produtoId:            i.produtoId,
       nomeBebida:           i.produto.nomeBebida,

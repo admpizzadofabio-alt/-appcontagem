@@ -1,14 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { View, Text, ScrollView, StyleSheet, Alert, TextInput, Modal, Pressable, TouchableOpacity, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native'
-import { useListarProdutosQuery } from '../../services/api/produtos'
-import { useCriarMovimentacaoMutation } from '../../services/api/movimentacoes'
+import { useListarProdutosQuery, useResetarCargaInicialMutation } from '../../services/api/produtos'
+import { useCriarMovimentacaoMutation, useListarMovimentacoesQuery } from '../../services/api/movimentacoes'
 import { useVerificarEntradaMutation, useTurnoAtualQuery, type VerificarEntradaResult } from '../../services/api/turnos'
 import { useLocalAcesso } from '../../hooks/useLocalAcesso'
+import { useAuth } from '../../contexts/AuthContext'
 import * as ImagePicker from 'expo-image-picker'
 import { ActionButton } from '../../components/ActionButton'
 import { Card } from '../../components/Card'
+import { SuccessOverlay } from '../../components/SuccessOverlay'
+import { useToast } from '../../components/Toast'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
@@ -23,9 +26,26 @@ export function MovimentacaoScreen() {
   const tipo = params.tipo
   const { veTodosLocais, localOperador } = useLocalAcesso()
 
+  const { usuario } = useAuth()
   const { data: produtos = [] } = useListarProdutosQuery({ ativo: true })
   const [criar, { isLoading }] = useCriarMovimentacaoMutation()
   const [verificar] = useVerificarEntradaMutation()
+  const [resetarCarga, { isLoading: resetando }] = useResetarCargaInicialMutation()
+
+  const { data: cargasFeitas = [] } = useListarMovimentacoesQuery(
+    { tipoMov: 'CargaInicial' },
+    { skip: tipo !== 'CargaInicial' },
+  )
+
+  // Map: produtoId -> Set de locais que já têm carga
+  const cargaMap = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    cargasFeitas.forEach((m) => {
+      if (!map.has(m.produtoId)) map.set(m.produtoId, new Set())
+      if (m.localOrigem) map.get(m.produtoId)!.add(m.localOrigem)
+    })
+    return map
+  }, [cargasFeitas])
 
   const [produtoId, setProdutoId] = useState('')
   const [quantidade, setQuantidade] = useState('')
@@ -36,6 +56,8 @@ export function MovimentacaoScreen() {
   const [verificacao, setVerificacao] = useState<VerificarEntradaResult | null>(null)
   const [justificativa, setJustificativa] = useState('')
   const [fotoPerda, setFotoPerda] = useState<string | null>(null)
+  const [sucesso, setSucesso] = useState<{ titulo: string; subtitulo?: string } | null>(null)
+  const toast = useToast()
 
   const { data: turnoAtual } = useTurnoAtualQuery(
     { local: local as 'Bar' | 'Delivery' },
@@ -44,15 +66,29 @@ export function MovimentacaoScreen() {
 
   const produtosFiltrados = produtos
     .filter((p) => p.nomeBebida.toLowerCase().includes(busca.toLowerCase()))
-    // Carga Inicial: ordena os sem-marco primeiro (badge visual abaixo identifica os já carregados)
+    // Carga Inicial: produtos sem carga no local selecionado aparecem primeiro
     .sort((a, b) => {
       if (tipo !== 'CargaInicial') return 0
-      const aMarco = !!a.marcoInicialEm
-      const bMarco = !!b.marcoInicialEm
-      if (aMarco === bMarco) return a.nomeBebida.localeCompare(b.nomeBebida)
-      return aMarco ? 1 : -1
+      const aCarregado = !!cargaMap.get(a.id)?.has(local)
+      const bCarregado = !!cargaMap.get(b.id)?.has(local)
+      if (aCarregado === bCarregado) return a.nomeBebida.localeCompare(b.nomeBebida)
+      return aCarregado ? 1 : -1
     })
   const produtoSelecionado = produtos.find((p) => p.id === produtoId)
+
+  // setorPadrao define os locais disponíveis para o produto: 'Bar'/'Delivery' restringe, 'Todos' libera ambos
+  const locaisDoProduto: ('Bar' | 'Delivery')[] = produtoSelecionado?.setorPadrao === 'Bar'
+    ? ['Bar']
+    : produtoSelecionado?.setorPadrao === 'Delivery'
+      ? ['Delivery']
+      : LOCAIS as ('Bar' | 'Delivery')[]
+
+  // Se o produto restringe local e o local atual não casa, ajusta automaticamente
+  React.useEffect(() => {
+    if (produtoSelecionado && !locaisDoProduto.includes(local)) {
+      setLocal(locaisDoProduto[0])
+    }
+  }, [produtoSelecionado?.id])
 
   const qtdNum = parseFloat(quantidade)
   const isGrandePerda = tipo === 'AjustePerda' && !!produtoSelecionado && qtdNum > 0 && qtdNum > produtoSelecionado.perdaThreshold
@@ -79,26 +115,54 @@ export function MovimentacaoScreen() {
         pendente,
         justificativaEntrada: just || undefined,
       }).unwrap()
+      const unidade = produtoSelecionado?.unidadeMedida ?? 'un'
       if (pendente) {
-        Alert.alert('Enviado para aprovação!', 'O Admin irá comparar com as notas fiscais e aprovar ou rejeitar.', [{ text: 'OK', onPress: () => nav.goBack() }])
+        setSucesso({ titulo: 'Enviado para aprovação!', subtitulo: 'O Admin irá comparar com as notas fiscais.' })
       } else if (tipo === 'AjustePerda') {
-        Alert.alert('Perda registrada!', `${qtd} ${produtoSelecionado?.unidadeMedida ?? 'unidades'} descontadas do estoque ${local}.`, [{ text: 'OK', onPress: () => nav.goBack() }])
+        setSucesso({ titulo: 'Perda registrada!', subtitulo: `${qtd} ${unidade} descontadas do estoque ${local}` })
       } else if (tipo === 'Entrada') {
-        Alert.alert('Entrada registrada!', `${qtd} ${produtoSelecionado?.unidadeMedida ?? 'unidades'} adicionados ao estoque ${local}.\nAdmin pode revisar e corrigir no painel se necessário.`, [{ text: 'OK', onPress: () => nav.goBack() }])
+        setSucesso({ titulo: 'Entrada registrada!', subtitulo: `+${qtd} ${unidade} no estoque ${local}` })
+      } else if (tipo === 'CargaInicial') {
+        setSucesso({ titulo: 'Carga registrada!', subtitulo: `${qtd} ${unidade} • ${local}` })
       } else {
-        Alert.alert('Sucesso', 'Movimentação registrada!', [{ text: 'OK', onPress: () => nav.goBack() }])
+        setSucesso({ titulo: 'Movimentação registrada!' })
       }
     } catch (e: any) {
-      Alert.alert('Erro', e.message ?? 'Não foi possível registrar.')
+      toast.error(e?.data?.message ?? e?.message ?? 'Não foi possível registrar.')
     }
   }
 
+  async function handleResetarCarga() {
+    if (!produtoSelecionado) return
+    Alert.alert(
+      '⚠️ Resetar Carga Inicial',
+      `Isso vai zerar o estoque de "${produtoSelecionado.nomeBebida}" e remover o marco inicial.\n\nO produto poderá ser reinicializado com uma nova carga.\n\nDeseja continuar?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Resetar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetarCarga({ id: produtoSelecionado.id, local }).unwrap()
+              setProdutoId('')
+              setBusca('')
+              Alert.alert('Resetado', 'Carga inicial removida. Você pode registrar uma nova agora.')
+            } catch (e: any) {
+              Alert.alert('Erro', e.message ?? 'Não foi possível resetar.')
+            }
+          },
+        },
+      ],
+    )
+  }
+
   async function handleSubmit() {
-    if (!produtoId) return Alert.alert('Atenção', 'Selecione um produto.')
+    if (!produtoId) return toast.warning('Selecione um produto')
     const qtd = parseFloat(quantidade)
-    if (!qtd || qtd <= 0) return Alert.alert('Atenção', 'Informe a quantidade.')
-    if (tipo === 'AjustePerda' && !motivo) return Alert.alert('Atenção', 'Informe o motivo da perda.')
-    if (tipo === 'AjustePerda' && !fotoPerda) return Alert.alert('Atenção', 'Foto da perda é obrigatória.')
+    if (!qtd || qtd <= 0) return toast.warning('Informe a quantidade')
+    if (tipo === 'AjustePerda' && !motivo) return toast.warning('Informe o motivo da perda')
+    if (tipo === 'AjustePerda' && !fotoPerda) return toast.warning('Foto da perda é obrigatória')
 
     // Carga Inicial após 9h: avisa que vendas anteriores ficarão zumbis (marco bloqueia)
     if (tipo === 'CargaInicial' && new Date().getHours() >= 9) {
@@ -171,21 +235,34 @@ export function MovimentacaoScreen() {
           <TextInput style={s.input} placeholder="Buscar produto..." placeholderTextColor={colors.textMuted} value={busca} onChangeText={setBusca} />
           <ScrollView style={s.list} nestedScrollEnabled>
             {produtosFiltrados.map((p) => {
-              const jaCarregado = tipo === 'CargaInicial' && !!p.marcoInicialEm
               const ativo = produtoId === p.id
+              const mostraBar = tipo === 'CargaInicial' && (p.setorPadrao === 'Bar' || p.setorPadrao === 'Todos' || !p.setorPadrao)
+              const mostraDel = tipo === 'CargaInicial' && (p.setorPadrao === 'Delivery' || p.setorPadrao === 'Todos' || !p.setorPadrao)
+              const barOk = mostraBar && !!cargaMap.get(p.id)?.has('Bar')
+              const delivOk = mostraDel && !!cargaMap.get(p.id)?.has('Delivery')
+              const jaCarregadoNoLocal = tipo === 'CargaInicial' && !!cargaMap.get(p.id)?.has(local)
               return (
                 <TouchableOpacity
                   key={p.id}
-                  style={[s.prodItem, ativo && s.prodItemActive, jaCarregado && !ativo && { opacity: 0.55 }]}
+                  style={[s.prodItem, ativo && s.prodItemActive, jaCarregadoNoLocal && !ativo && { opacity: 0.55 }]}
                   onPress={() => { setProdutoId(p.id); setBusca(p.nomeBebida) }}
                 >
                   <Text style={[s.prodName, ativo && { color: '#fff' }, { flex: 1 }]}>
                     {p.nomeBebida}
                   </Text>
-                  {jaCarregado && (
-                    <Text style={{ fontSize: 11, color: ativo ? '#fff' : colors.success, fontWeight: '700' }}>
-                      ✓ carregado
-                    </Text>
+                  {tipo === 'CargaInicial' && (
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      {mostraBar && (
+                        <Text style={[s.badgeLocal, { color: ativo ? '#fff' : barOk ? colors.success : colors.textMuted, opacity: barOk ? 1 : 0.4 }]}>
+                          Bar{barOk ? '✓' : '○'}
+                        </Text>
+                      )}
+                      {mostraDel && (
+                        <Text style={[s.badgeLocal, { color: ativo ? '#fff' : delivOk ? colors.success : colors.textMuted, opacity: delivOk ? 1 : 0.4 }]}>
+                          Del{delivOk ? '✓' : '○'}
+                        </Text>
+                      )}
+                    </View>
                   )}
                 </TouchableOpacity>
               )
@@ -204,11 +281,16 @@ export function MovimentacaoScreen() {
           <Text style={s.sectionTitle}>Local</Text>
           {veTodosLocais ? (
             <View style={s.tabs}>
-              {LOCAIS.map((l) => (
-                <View key={l} style={[s.tab, local === l && s.tabActive]}>
-                  <Text style={[s.tabText, local === l && s.tabTextActive]} onPress={() => setLocal(l as 'Bar' | 'Delivery')}>{l}</Text>
-                </View>
-              ))}
+              {locaisDoProduto.map((l) => {
+                const temCarga = tipo === 'CargaInicial' && !!produtoSelecionado && !!cargaMap.get(produtoSelecionado.id)?.has(l)
+                const ativoTab = local === l
+                return (
+                  <TouchableOpacity key={l} style={[s.tab, ativoTab && s.tabActive]} onPress={() => setLocal(l)}>
+                    <Text style={[s.tabText, ativoTab && s.tabTextActive]}>{l}</Text>
+                    {temCarga && <Text style={{ fontSize: 10, color: ativoTab ? '#fff' : colors.success, fontWeight: '800' }}>✓ carregado</Text>}
+                  </TouchableOpacity>
+                )
+              })}
             </View>
           ) : (
             <View style={[s.tab, s.tabActive]}>
@@ -274,6 +356,16 @@ export function MovimentacaoScreen() {
           icon={tipo === 'Entrada' ? '📥' : tipo === 'AjustePerda' ? '🗑️' : tipo === 'CargaInicial' ? '📦' : '📝'}
         />
 
+        {tipo === 'CargaInicial' && !!produtoSelecionado && !!cargaMap.get(produtoSelecionado.id)?.has(local) && usuario?.nivelAcesso === 'Admin' && (
+          <TouchableOpacity
+            style={s.resetBtn}
+            onPress={handleResetarCarga}
+            disabled={resetando}
+          >
+            <Text style={s.resetBtnTxt}>{resetando ? 'Resetando...' : `🔄 Resetar carga inicial — ${local}`}</Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
 
       <Modal visible={verificacao !== null} transparent animationType="fade">
@@ -338,6 +430,13 @@ export function MovimentacaoScreen() {
           </View>
         </View>
       </Modal>
+
+      <SuccessOverlay
+        visible={!!sucesso}
+        titulo={sucesso?.titulo ?? ''}
+        subtitulo={sucesso?.subtitulo}
+        onClose={() => { setSucesso(null); nav.goBack() }}
+      />
     </SafeAreaView>
   )
 }
@@ -354,6 +453,7 @@ const s = StyleSheet.create({
   prodItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 },
   prodItemActive: { backgroundColor: colors.primary },
   prodName: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  badgeLocal: { fontSize: 10, fontWeight: '700' },
   tabs: { flexDirection: 'row', gap: 8 },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surfaceAlt, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -397,4 +497,6 @@ const s = StyleSheet.create({
   btnConfirmarTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
   btnEntendi: { padding: 14, borderRadius: 12, backgroundColor: colors.danger, alignItems: 'center', marginTop: 12 },
   btnEntendiTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  resetBtn: { marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.danger, alignItems: 'center', backgroundColor: 'transparent' },
+  resetBtnTxt: { fontSize: 13, fontWeight: '700', color: colors.danger },
 })

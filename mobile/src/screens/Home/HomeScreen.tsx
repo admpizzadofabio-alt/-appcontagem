@@ -27,9 +27,10 @@ export function HomeScreen() {
   const isAdmin = usuario?.nivelAcesso === 'Admin'
   const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
   const localOperador = (usuario?.setor === 'Delivery' ? 'Delivery' : 'Bar') as 'Bar' | 'Delivery'
-  const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador })
-  const { data: turnoDelivery } = useTurnoAtualQuery({ local: 'Delivery' }, { skip: !isAdmin })
-  const { data: turnoBar } = useTurnoAtualQuery({ local: 'Bar' }, { skip: !isAdmin })
+  // Polling: 15s para sincronizar turno aberto/fechado por outro dispositivo (admin/outro op)
+  const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador }, { pollingInterval: 15000 })
+  const { data: turnoDelivery } = useTurnoAtualQuery({ local: 'Delivery' }, { skip: !isAdmin, pollingInterval: 15000 })
+  const { data: turnoBar } = useTurnoAtualQuery({ local: 'Bar' }, { skip: !isAdmin, pollingInterval: 15000 })
   const { data: colibriNovos } = useColibriNovosQuery(undefined, {
     skip: !isSup,
     pollingInterval: 60 * 60 * 1000, // re-verifica a cada 1h

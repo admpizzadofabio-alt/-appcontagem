@@ -38,6 +38,14 @@ export async function criar(data: CriarData) {
     throw new ForbiddenError('Apenas Admin ou Supervisor podem registrar Carga Inicial')
   }
 
+  if (data.tipoMov === 'CargaInicial') {
+    const local = data.localOrigem ?? data.localDestino
+    const jaExiste = await prisma.movimentacaoEstoque.count({
+      where: { produtoId: data.produtoId, tipoMov: 'CargaInicial', localOrigem: local },
+    })
+    if (jaExiste > 0) throw new BusinessRuleError(`Produto já possui carga inicial registrada para ${local}.`)
+  }
+
   // Operador só pode operar no próprio setor (Admin/Supervisor liberados)
   if (data.tipoMov === 'Transferencia') {
     // Em transferência: origem deve ser o setor do operador
@@ -124,15 +132,9 @@ async function _atualizarEstoque(tx: any, data: CriarData) {
       update: { quantidadeAtual: data.quantidade, atualizadoPor: data.usuarioId },
     })
 
-    if (outrosLocais.length > 0) {
-      await tx.estoqueAtual.updateMany({
-        where: { produtoId: data.produtoId, local: { not: local } },
-        data: { quantidadeAtual: 0, atualizadoPor: data.usuarioId },
-      })
-    }
-
-    await tx.produto.update({
-      where: { id: data.produtoId },
+    // marcoInicialEm: define apenas na primeira carga (qualquer local); updateMany garante idempotência
+    await tx.produto.updateMany({
+      where: { id: data.produtoId, marcoInicialEm: null },
       data: { marcoInicialEm: agora },
     })
 
@@ -183,6 +185,53 @@ async function _atualizarEstoque(tx: any, data: CriarData) {
     await _upsertEstoque(tx, data.produtoId, data.localOrigem!, -data.quantidade, data.usuarioId)
     await _upsertEstoque(tx, data.produtoId, data.localDestino!, data.quantidade, data.usuarioId)
   }
+}
+
+// Admin-only: apaga uma movimentação e reverte o impacto no estoque.
+// CargaInicial não é deletável aqui (usar resetarCargaInicial).
+// Movimentações pendentes (não aplicadas) não mexem no estoque, só deletam.
+export async function deletarMovimentacao(id: string, usuarioId: string, usuarioNome: string) {
+  const mov = await prisma.movimentacaoEstoque.findUnique({ where: { id }, include: { produto: { select: { nomeBebida: true } } } })
+  if (!mov) throw new NotFoundError('Movimentação não encontrada')
+  if (mov.tipoMov === 'CargaInicial') {
+    throw new BusinessRuleError('Use "Resetar Carga Inicial" no produto em vez de deletar.')
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Só reverte estoque se foi aplicada (Aprovado). Pendente/Rejeitado nunca mexeram no estoque.
+    if (mov.aprovacaoStatus === 'Aprovado') {
+      if (mov.tipoMov === 'Entrada') {
+        await _upsertEstoque(tx, mov.produtoId, mov.localDestino ?? mov.localOrigem ?? 'Bar', -mov.quantidade, usuarioId)
+      } else if (['Saida', 'AjustePerda'].includes(mov.tipoMov)) {
+        await _upsertEstoque(tx, mov.produtoId, mov.localOrigem ?? 'Bar', mov.quantidade, usuarioId)
+      } else if (mov.tipoMov === 'Transferencia') {
+        await _upsertEstoque(tx, mov.produtoId, mov.localOrigem!, mov.quantidade, usuarioId)
+        await _upsertEstoque(tx, mov.produtoId, mov.localDestino!, -mov.quantidade, usuarioId)
+      } else if (mov.tipoMov === 'AjusteContagem') {
+        const local = mov.localOrigem ?? mov.localDestino ?? 'Bar'
+        const sinalAjuste = mov.localDestino ? -1 : 1 // se entrou (destino), reverte tirando
+        await _upsertEstoque(tx, mov.produtoId, local, sinalAjuste * mov.quantidade, usuarioId)
+      }
+    }
+
+    // Apaga aprovação relacionada (FK cascade não está definido)
+    await tx.aprovacaoMovimentacao.deleteMany({ where: { movimentacaoId: id } })
+    await tx.movimentacaoEstoque.delete({ where: { id } })
+
+    await tx.logAuditoria.create({
+      data: {
+        usuarioId, usuarioNome, setor: 'Admin',
+        acao: 'MOVIMENTACAO_DELETADA',
+        entidade: 'MovimentacaoEstoque',
+        idReferencia: id,
+        detalhes: JSON.stringify({
+          produto: mov.produto.nomeBebida, tipoMov: mov.tipoMov,
+          quantidade: mov.quantidade, localOrigem: mov.localOrigem, localDestino: mov.localDestino,
+          eraAprovada: mov.aprovacaoStatus === 'Aprovado',
+        }),
+      },
+    })
+  })
 }
 
 async function _upsertEstoque(tx: any, produtoId: string, local: string, delta: number, usuarioId: string) {

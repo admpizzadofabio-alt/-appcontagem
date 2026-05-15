@@ -33,7 +33,10 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     }
   }
 
-  logger.error({ err, path: req.path, method: req.method }, 'Erro não tratado')
+  const errSafe = err instanceof Error
+    ? { message: err.message, name: err.name }
+    : { message: String(err) }
+  logger.error({ err: errSafe, path: req.path, method: req.method }, 'Erro não tratado')
   captureException(err, { path: req.path, method: req.method, userId: (req as any).user?.sub })
 
   return res.status(500).json({

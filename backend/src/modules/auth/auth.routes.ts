@@ -1,8 +1,11 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
+import { z } from 'zod'
 import { requireAuth, requireNivel } from '../../middlewares/auth.js'
 import { loginHandler, refreshHandler, logoutHandler, meHandler } from './auth.controller.js'
 import { setupTotp, enableTotp, disableTotp } from './totp.service.js'
+
+const totpCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Código TOTP deve ter 6 dígitos') })
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -16,7 +19,12 @@ const loginLimiter = rateLimit({
 // mas bloqueia atacante tentando refresh tokens vazados em loop.
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 10,
+  keyGenerator: (req) => {
+    // Tenta usar userId do body (refresh token request); cai no IP se não disponível
+    const body = req.body as any
+    return body?.userId ?? req.ip ?? 'anon'
+  },
   skip: () => process.env.NODE_ENV === 'test',
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas tentativas de refresh. Tente em 15 minutos.' },
 })
@@ -33,7 +41,10 @@ router.post('/totp/setup', requireAuth, requireNivel(['Admin']), async (req, res
   try { res.json(await setupTotp(req.user!.sub)) } catch (e) { next(e) }
 })
 router.post('/totp/enable', requireAuth, requireNivel(['Admin']), async (req, res, next) => {
-  try { res.json(await enableTotp(req.user!.sub, String(req.body?.code ?? ''))) } catch (e) { next(e) }
+  try {
+    const { code } = totpCodeSchema.parse(req.body)
+    res.json(await enableTotp(req.user!.sub, code))
+  } catch (e) { next(e) }
 })
 router.post('/totp/disable', requireAuth, requireNivel(['Admin']), async (req, res, next) => {
   try { res.json(await disableTotp(req.user!.sub)) } catch (e) { next(e) }

@@ -1,14 +1,63 @@
-import React, { useState } from 'react'
-import { View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from 'react-native'
+import React, { useState, useRef, useEffect } from 'react'
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Animated, Easing } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import * as Haptics from 'expo-haptics'
 import { useAuth } from '../../contexts/AuthContext'
 import { PinPad } from '../../components/PinPad'
+import { useToast } from '../../components/Toast'
 import { colors } from '../../theme/colors'
 
 export function LoginScreen() {
   const { signIn, signInWithBiometric, biometricAvailable } = useAuth()
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
+  const toast = useToast()
+
+  // Animação de entrada: logo, brand, card e pinpad aparecem em sequência
+  const logoOpacity = useRef(new Animated.Value(0)).current
+  const logoScale = useRef(new Animated.Value(0.7)).current
+  const brandY = useRef(new Animated.Value(20)).current
+  const brandOpacity = useRef(new Animated.Value(0)).current
+  const cardY = useRef(new Animated.Value(40)).current
+  const cardOpacity = useRef(new Animated.Value(0)).current
+  const pinOpacity = useRef(new Animated.Value(0)).current
+  const bioOpacity = useRef(new Animated.Value(0)).current
+
+  // Shake do PinPad em erro
+  const shake = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(logoOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, tension: 50, friction: 7 }),
+      ]),
+      Animated.parallel([
+        Animated.timing(brandY, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(brandOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(cardY, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(cardOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(pinOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(bioOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+    ]).start()
+  }, [])
+
+  function shakePin() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+    shake.setValue(0)
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 12, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -12, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 8, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -8, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start()
+  }
 
   async function handlePinChange(value: string) {
     setPin(value)
@@ -17,7 +66,8 @@ export function LoginScreen() {
       try {
         await signIn(value, true)
       } catch {
-        Alert.alert('PIN inválido', 'Verifique seu PIN e tente novamente.')
+        shakePin()
+        toast.error('PIN inválido. Tente novamente.')
         setPin('')
       } finally {
         setLoading(false)
@@ -27,37 +77,43 @@ export function LoginScreen() {
 
   async function handleBiometric() {
     try { await signInWithBiometric() }
-    catch (e: any) { Alert.alert('Biometria', e.message) }
+    catch (e: any) { toast.error(e?.message ?? 'Falha na biometria') }
   }
 
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.top}>
-        <View style={s.logoBox}>
+        <Animated.View style={[s.logoBox, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
           <Text style={s.logoEmoji}>🍕</Text>
-        </View>
-        <Text style={s.brand}>Pizza do Fábio</Text>
-        <Text style={s.tagline}>Controle de Bebidas</Text>
+        </Animated.View>
+        <Animated.Text style={[s.brand, { opacity: brandOpacity, transform: [{ translateY: brandY }] }]}>
+          Pizza do Fábio
+        </Animated.Text>
+        <Animated.Text style={[s.tagline, { opacity: brandOpacity, transform: [{ translateY: brandY }] }]}>
+          Controle de Bebidas
+        </Animated.Text>
       </View>
 
-      <View style={s.card}>
+      <Animated.View style={[s.card, { opacity: cardOpacity, transform: [{ translateY: cardY }] }]}>
         <Text style={s.cardTitle}>Bem-vindo!</Text>
         <Text style={s.cardSub}>Digite seu PIN de 6 dígitos</Text>
-      </View>
+      </Animated.View>
 
-      <View style={s.pinArea}>
+      <Animated.View style={[s.pinArea, { opacity: pinOpacity, transform: [{ translateX: shake }] }]}>
         {loading
           ? <ActivityIndicator size="large" color="#fff" style={{ marginVertical: 40 }} />
           : <PinPad value={pin} onChange={handlePinChange} maxLength={6} />
         }
 
         {biometricAvailable && !loading && (
-          <TouchableOpacity style={s.bioBtn} onPress={handleBiometric} activeOpacity={0.7}>
-            <Text style={s.bioIcon}>👆</Text>
-            <Text style={s.bioLabel}>Entrar com Digital</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: bioOpacity }}>
+            <TouchableOpacity style={s.bioBtn} onPress={handleBiometric} activeOpacity={0.7}>
+              <Text style={s.bioIcon}>👆</Text>
+              <Text style={s.bioLabel}>Entrar com Digital</Text>
+            </TouchableOpacity>
+          </Animated.View>
         )}
-      </View>
+      </Animated.View>
 
       <Text style={s.footer}>v2.0 · Pizza do Fábio ERP</Text>
     </SafeAreaView>

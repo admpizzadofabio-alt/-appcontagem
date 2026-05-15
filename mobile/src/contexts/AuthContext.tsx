@@ -36,7 +36,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           LocalAuthentication.hasHardwareAsync(),
         ])
         setBiometricAvailable(bioSupported && bioEnabled === 'true')
-        if (token && userStr) setUsuario(JSON.parse(userStr))
+        if (token && userStr) {
+          // Mostra app imediatamente com cache (sem bloquear no HTTP)
+          setUsuario(JSON.parse(userStr))
+          // Valida sessão em background: atualiza papel ou desloga se token inválido
+          api.get('/auth/me').then(async ({ data }) => {
+            const freshUser: Usuario = { id: data.sub, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso }
+            await storage.set(KEYS.USUARIO, JSON.stringify(freshUser))
+            setUsuario(freshUser)
+          }).catch(async (err: any) => {
+            if (err?.response?.status === 401) {
+              await Promise.all([storage.delete(KEYS.ACCESS_TOKEN), storage.delete(KEYS.REFRESH_TOKEN), storage.delete(KEYS.USUARIO)])
+              setUsuario(null)
+            }
+          })
+        }
       } catch {
         // ignora erro de sessão
       } finally {
@@ -64,10 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fallbackLabel: 'Usar PIN',
     })
     if (!result.success) throw new Error('Biometria falhou')
-    const userStr = await storage.get(KEYS.USUARIO)
     const token = await storage.get(KEYS.ACCESS_TOKEN)
-    if (!userStr || !token) throw new Error('Sessão expirada. Entre com seu PIN.')
-    setUsuario(JSON.parse(userStr))
+    if (!token) throw new Error('Sessão expirada. Entre com seu PIN.')
+    try {
+      const { data } = await api.get('/auth/me')
+      const freshUser: Usuario = { id: data.sub, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso }
+      await storage.set(KEYS.USUARIO, JSON.stringify(freshUser))
+      setUsuario(freshUser)
+    } catch {
+      throw new Error('Não foi possível validar a sessão. Entre com seu PIN.')
+    }
   }
 
   async function signOut() {

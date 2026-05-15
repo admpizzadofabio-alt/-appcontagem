@@ -915,6 +915,120 @@ Ajuste no controller [movimentacoes.controller.ts:9](backend/src/modules/movimen
 
 ---
 
+---
+
+## VULN-024 — Biometric bypass: login biométrico não validava sessão no servidor
+
+| Campo      | Valor |
+|------------|-------|
+| **ID**     | VULN-024 |
+| **Título** | `signInWithBiometric()` carregava token do cache sem chamada ao servidor — 2FA poderia ser bypassado |
+| **Severidade** | **High** |
+| **OWASP**  | [MASVS-AUTH-1 — Authentication](https://mas.owasp.org/MASVS/controls/MASVS-AUTH-1/) |
+| **Status** | Fixed — 2026-05-14 |
+| **Fonte** | Auditoria mobile pré-deploy |
+
+### Descrição
+
+`signInWithBiometric()` em `AuthContext.tsx` autenticava o hardware biométrico (local) e depois lia o `accessToken` e `usuario` diretamente do `SecureStore`, setando o estado sem confirmar com o servidor. Isso significava:
+
+1. **2FA bypassado**: usuário Admin com TOTP ativo podia entrar via biometria sem fornecer o código TOTP
+2. **Papel desatualizado**: se o nivelAcesso foi modificado pelo Admin (ex: promoção/rebaixamento), o app usava o papel do cache, não o atual do servidor
+3. **Sessão revogada ignorada**: tokens deletados manualmente do banco (logout remoto) eram ignorados — o app entrava assim mesmo
+
+### Fix Aplicado
+
+`signInWithBiometric()` agora chama `GET /auth/me` após a autenticação biométrica:
+- Valida que o JWT ainda é aceito pelo servidor (assinatura + expiração)
+- Atualiza o `usuario` armazenado com dados frescos do payload JWT
+- Em caso de falha (401 ou rede), lança erro e força login por PIN
+
+O mesmo padrão foi aplicado em `init()` (startup do app): ao encontrar token no `SecureStore`, chama `/auth/me` antes de setar o usuário, caindo para o cache somente em erro de rede (offline graceful).
+
+### Arquivos Alterados
+
+| Arquivo | Mudança |
+|---|---|
+| [AuthContext.tsx](mobile/src/contexts/AuthContext.tsx#L39) | `init()`: chama `/auth/me`; fallback para cache só em erro de rede |
+| [AuthContext.tsx](mobile/src/contexts/AuthContext.tsx#L61) | `signInWithBiometric()`: chama `/auth/me`; falha fecha sessão |
+
+---
+
+## VULN-025 — Client-side RBAC: nivelAcesso lido do cache sem verificação server-side
+
+| Campo      | Valor |
+|------------|-------|
+| **ID**     | VULN-025 |
+| **Título** | `nivelAcesso` armazenado no `SecureStore` nunca era sincronizado com o servidor no startup |
+| **Severidade** | **Medium** |
+| **OWASP**  | [MASVS-AUTH-2 — Authorization](https://mas.owasp.org/MASVS/controls/MASVS-AUTH-2/) |
+| **Status** | Fixed — 2026-05-14 (coberto pelo fix do VULN-024) |
+| **Fonte** | Auditoria mobile pré-deploy |
+
+### Descrição
+
+O hook `useLocalAcesso` e telas como `EstoqueScreen`, `AdminScreen`, `MovimentacaoScreen` liam `usuario.nivelAcesso` do contexto, que por sua vez vinha do JSON cacheado no `SecureStore`. Se o `SecureStore` fosse adulterado (dispositivo rooteado) ou o papel do usuário fosse alterado pelo Admin, o app exibia funcionalidades do nível errado até o próximo login completo.
+
+**Nota**: o backend tem `requireNivel` em todos os endpoints sensíveis — um Operador com `nivelAcesso: 'Admin'` adulterado no cache veria a UI de Admin, mas qualquer mutação seria rejeitada com 403. O risco real é de **confusão de UI**, não de escalada de privilégio efetiva.
+
+### Fix Aplicado
+
+Coberto pelo VULN-024: ao chamar `/auth/me` no startup e no login biométrico, o `usuario.nivelAcesso` do contexto passa a vir do JWT (gerado pelo servidor), eliminando a dependência do JSON cacheado.
+
+---
+
+## VULN-026 — JWT_EXPIRES_IN padrão de 1h permite papel desatualizado por até 1 hora
+
+| Campo      | Valor |
+|------------|-------|
+| **ID**     | VULN-026 |
+| **Título** | Access token com expiração de 1h: usuário rebaixado mantém privilégios por até 1h |
+| **Severidade** | **Low** |
+| **OWASP**  | [API2:2023 — Broken Authentication](https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/) |
+| **Status** | Fixed — 2026-05-14 |
+| **Fonte** | Auditoria mobile pré-deploy |
+
+### Descrição
+
+O payload do JWT inclui `nivelAcesso`. O `requireNivel` do backend verifica esse campo do payload, não do banco. Se um Admin é rebaixado a Operador, seu JWT existente continua afirmando `nivelAcesso: 'Admin'` até expirar — até 1h de janela de privilégio residual.
+
+### Fix Aplicado
+
+`JWT_EXPIRES_IN` default reduzido de `'1h'` para `'15m'` em `env.ts`. O interceptor Axios do app já faz refresh transparente, então não há impacto de UX. A janela de papel desatualizado cai de 60min para no máximo 15min.
+
+| Arquivo | Mudança |
+|---|---|
+| [env.ts](backend/src/config/env.ts#L9) | `JWT_EXPIRES_IN` default: `'1h'` → `'15m'` |
+
+---
+
+## VULN-027 — Token storage sem proteção contra root (risco aceito)
+
+| Campo      | Valor |
+|------------|-------|
+| **ID**     | VULN-027 |
+| **Título** | Tokens em `expo-secure-store` acessíveis em dispositivos rooteados |
+| **Severidade** | **Low** |
+| **OWASP**  | [MASVS-STORAGE-1](https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/) |
+| **Status** | **Accepted Risk** — 2026-05-14 |
+| **Fonte** | Auditoria mobile pré-deploy |
+
+### Descrição
+
+Em dispositivos Android rooteados, o Android Keystore (onde `expo-secure-store` persiste os tokens) pode ser acessado por processos privilegiados. Um atacante com acesso root ao dispositivo pode extrair o `accessToken` e `refreshToken`.
+
+### Análise de Risco
+
+- **Vetor**: requer acesso físico + root — não é remoto
+- **Impacto**: acesso à conta até refresh token expirar (30 dias)
+- **Mitigação atual**: `expo-secure-store` é a melhor camada disponível sem módulo nativo customizado; o refresh token expirado já invalida a sessão; VULN-024 garante que tokens revogados são detectados no próximo startup
+
+### Decisão
+
+Risco aceito para v1. Contexto: app interno de gestão de bar, não app de banco/saúde. Mitigação futura: adicionar detecção de root via `expo-device.isRootedExperimentalAsync()` e bloquear biometria em dispositivos rooteados.
+
+---
+
 ## Checklist de Revisão para Novos Endpoints
 
 Ao criar qualquer rota mutante (`POST`, `PATCH`, `PUT`, `DELETE`) em APIs REST:

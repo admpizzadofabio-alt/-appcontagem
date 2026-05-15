@@ -45,6 +45,7 @@ export type MeuTurnoData = {
     dataFechamento: string | null
     totalItens: number
     totalDesvios: number
+    operador: string | null
     itens: ItemContagemResumo[]
   } | null
   movimentacoes: {

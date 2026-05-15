@@ -2,9 +2,10 @@ import React from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { Text, ActivityIndicator, View, StyleSheet } from 'react-native'
+import { Text } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
 import { colors } from '../theme/colors'
+import { SplashScreen } from '../components/SplashScreen'
 
 import { LoginScreen } from '../screens/Login/LoginScreen'
 import { HomeScreen } from '../screens/Home/HomeScreen'
@@ -108,14 +109,10 @@ function AuthNavigator() {
 
 export function Navigation() {
   const { usuario, loading } = useAuth()
-  if (loading) return <View style={s.loader}><ActivityIndicator size="large" color={colors.primary} /></View>
+  if (loading) return <SplashScreen />
   return (
     <NavigationContainer>
       {usuario ? <AppNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   )
 }
-
-const s = StyleSheet.create({
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-})

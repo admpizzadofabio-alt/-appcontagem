@@ -8,9 +8,22 @@
 import { env } from '../config/env.js'
 import { logger } from '../config/logger.js'
 
+const ALLOWED_WEBHOOK_HOSTS = ['discord.com', 'slack.com', 'api.telegram.org']
+
 export async function enviarAlerta(mensagem: string) {
   const url = env.ALERTA_WEBHOOK_URL
-  if (!url) return // não configurado — silencioso
+  if (!url) return
+
+  try {
+    const parsed = new URL(url)
+    if (!ALLOWED_WEBHOOK_HOSTS.some(h => parsed.hostname.endsWith(h))) {
+      logger.warn({ host: parsed.hostname }, 'Webhook URL não permitida — alerta ignorado')
+      return
+    }
+  } catch {
+    logger.warn({ url }, 'ALERTA_WEBHOOK_URL inválida — alerta ignorado')
+    return
+  }
 
   try {
     if (url.includes('discord.com') || url.includes('slack.com')) {
