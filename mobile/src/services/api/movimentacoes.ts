@@ -85,6 +85,10 @@ export const movimentacoesApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/movimentacoes/transferencias/${id}/confirmar`, method: 'PATCH' }),
       invalidatesTags: ['Movimentacoes', 'Estoque'],
     }),
+    rejeitarTransferencia: build.mutation<void, string>({
+      query: (id) => ({ url: `/movimentacoes/transferencias/${id}/rejeitar`, method: 'PATCH' }),
+      invalidatesTags: ['Movimentacoes', 'Estoque'],
+    }),
     deletarMovimentacao: build.mutation<{ ok: boolean; mensagem: string }, string>({
       query: (id) => ({ url: `/movimentacoes/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Movimentacoes', 'Estoque'],
@@ -101,5 +105,6 @@ export const {
   useRejeitarMovimentacaoMutation,
   useListarTransferenciasPendentesQuery,
   useConfirmarTransferenciaMutation,
+  useRejeitarTransferenciaMutation,
   useDeletarMovimentacaoMutation,
 } = movimentacoesApi

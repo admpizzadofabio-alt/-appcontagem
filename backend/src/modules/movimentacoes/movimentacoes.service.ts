@@ -317,6 +317,33 @@ export async function confirmarTransferencia(movId: string, confirmadorId: strin
   })
 }
 
+export async function rejeitarTransferencia(movId: string, rejeitadorId: string, rejeitadorNome: string, setor: string, nivelAcesso: string) {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.movimentacaoEstoque.updateMany({
+      where: { id: movId, tipoMov: 'Transferencia', aprovacaoStatus: StatusAprovacao.Pendente },
+      data: { aprovacaoStatus: StatusAprovacao.Rejeitado },
+    })
+    if (updated.count === 0) throw new ForbiddenError('Transferência não encontrada ou já resolvida')
+
+    const mov = await tx.movimentacaoEstoque.findUnique({ where: { id: movId } })
+    if (!mov) throw new NotFoundError('Transferência não encontrada')
+    if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
+      throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode rejeitar esta transferência`)
+
+    await tx.logAuditoria.create({
+      data: {
+        usuarioId: rejeitadorId,
+        usuarioNome: rejeitadorNome,
+        setor,
+        acao: 'TRANSFERENCIA_REJEITADA',
+        entidade: 'MovimentacaoEstoque',
+        idReferencia: movId,
+        detalhes: JSON.stringify({ de: mov.localOrigem, para: mov.localDestino, quantidade: mov.quantidade }),
+      },
+    })
+  })
+}
+
 export async function listarPendentes() {
   return prisma.aprovacaoMovimentacao.findMany({
     where: { status: StatusAprovacao.Pendente },

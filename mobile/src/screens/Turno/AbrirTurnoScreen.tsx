@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTurnoAtualQuery, useAbrirTurnoMutation, useFecharTurnoMutation, useDeletarTurnoMutation } from '../../services/api/turnos'
-import { useListarTransferenciasPendentesQuery, useConfirmarTransferenciaMutation } from '../../services/api/movimentacoes'
+import { useListarTransferenciasPendentesQuery, useConfirmarTransferenciaMutation, useRejeitarTransferenciaMutation } from '../../services/api/movimentacoes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocalAcesso } from '../../hooks/useLocalAcesso'
 import { Card } from '../../components/Card'
@@ -30,6 +30,7 @@ export function AbrirTurnoScreen() {
   const [deletar, { isLoading: deletando }] = useDeletarTurnoMutation()
   const { data: transferenciasPendentes = [] } = useListarTransferenciasPendentesQuery({ local })
   const [confirmarTransferencia] = useConfirmarTransferenciaMutation()
+  const [rejeitarTransferencia] = useRejeitarTransferenciaMutation()
 
   async function handleConfirmarTransferencia(
     id: string,
@@ -82,6 +83,28 @@ export function AbrirTurnoScreen() {
               refetch()
             } catch (e: any) {
               Alert.alert('Erro', e.message ?? 'Falha ao apagar turno')
+            }
+          },
+        },
+      ],
+    )
+  }
+
+  async function handleRejeitarTransferencia(id: string, nomeProduto: string) {
+    Alert.alert(
+      'Recusar transferência',
+      `Recusar o recebimento de "${nomeProduto}"? O estoque não será alterado.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Recusar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await rejeitarTransferencia(id).unwrap()
+              Alert.alert('Recusado', 'Transferência recusada. Nenhum estoque foi alterado.')
+            } catch (e: any) {
+              Alert.alert('Erro', e.message ?? 'Falha ao recusar transferência')
             }
           },
         },
@@ -178,12 +201,20 @@ export function AbrirTurnoScreen() {
                       <Text style={s.transferenciaProduto}>{t.produto.nomeBebida}</Text>
                       <Text style={s.transferenciaSub}>{t.quantidade} {t.produto.unidadeMedida} · De: {t.localOrigem} · Por: {t.usuario.nome}</Text>
                     </View>
-                    <TouchableOpacity
-                      style={s.confirmarBtn}
-                      onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
-                    >
-                      <Text style={s.confirmarBtnTxt}>Confirmar</Text>
-                    </TouchableOpacity>
+                    <View style={s.transferenciaAcoes}>
+                      <TouchableOpacity
+                        style={s.recusarBtn}
+                        onPress={() => handleRejeitarTransferencia(t.id, t.produto.nomeBebida)}
+                      >
+                        <Text style={s.recusarBtnTxt}>Recusar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.confirmarBtn}
+                        onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
+                      >
+                        <Text style={s.confirmarBtnTxt}>Confirmar</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))}
               </Card>
@@ -246,12 +277,20 @@ export function AbrirTurnoScreen() {
                       <Text style={s.transferenciaProduto}>{t.produto.nomeBebida}</Text>
                       <Text style={s.transferenciaSub}>{t.quantidade} {t.produto.unidadeMedida} · De: {t.localOrigem} · Por: {t.usuario.nome}</Text>
                     </View>
-                    <TouchableOpacity
-                      style={s.confirmarBtn}
-                      onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
-                    >
-                      <Text style={s.confirmarBtnTxt}>Confirmar</Text>
-                    </TouchableOpacity>
+                    <View style={s.transferenciaAcoes}>
+                      <TouchableOpacity
+                        style={s.recusarBtn}
+                        onPress={() => handleRejeitarTransferencia(t.id, t.produto.nomeBebida)}
+                      >
+                        <Text style={s.recusarBtnTxt}>Recusar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.confirmarBtn}
+                        onPress={() => handleConfirmarTransferencia(t.id, t.produto.nomeBebida, t.produto.setorPadrao, t.localDestino)}
+                      >
+                        <Text style={s.confirmarBtnTxt}>Confirmar</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))}
               </Card>
@@ -325,8 +364,11 @@ const s = StyleSheet.create({
   transferenciaItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border },
   transferenciaProduto: { fontSize: 13, fontWeight: '700', color: colors.text },
   transferenciaSub: { fontSize: 11, color: colors.textSub, marginTop: 2 },
+  transferenciaAcoes: { flexDirection: 'row', gap: 6 },
   confirmarBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.info },
   confirmarBtnTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  recusarBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.dangerLight, borderWidth: 1, borderColor: colors.danger },
+  recusarBtnTxt: { fontSize: 12, fontWeight: '700', color: colors.danger },
 
   erroComandaBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.warningLight, borderRadius: 14, padding: 14, gap: 12, borderWidth: 1, borderColor: colors.warning },
   erroComandaIcon: { fontSize: 24 },

@@ -50,6 +50,13 @@ export async function confirmarTransferenciaHandler(req: Request, res: Response,
   } catch (err) { next(err) }
 }
 
+export async function rejeitarTransferenciaHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await service.rejeitarTransferencia(String(req.params.id), req.user!.sub, req.user!.nome, req.user!.setor, req.user!.nivelAcesso)
+    res.json({ message: 'Transferência rejeitada' })
+  } catch (err) { next(err) }
+}
+
 export async function aprovarHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { motivo } = aprovarSchema.parse(req.body)

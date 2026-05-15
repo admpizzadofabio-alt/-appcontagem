@@ -71,7 +71,11 @@ export function EstoqueTimeline({ produtoId, local, quantidadeAtual, unidadeMedi
   )
 
   if (isLoading) return <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
-  if (movs.length === 0 && !ultimaContagemEm) return <Text style={s.vazio}>{data ? 'Sem movimentações nesse dia' : 'Sem movimentações registradas'}</Text>
+
+  // Exclui transferências pendentes — ainda não impactaram o estoque
+  const movsEfetivos = movs.filter((m) => !(m.tipoMov === 'Transferencia' && m.aprovacaoStatus === 'Pendente'))
+
+  if (movsEfetivos.length === 0 && !ultimaContagemEm) return <Text style={s.vazio}>{data ? 'Sem movimentações nesse dia' : 'Sem movimentações registradas'}</Text>
 
   // Agrupa movs do mesmo tipo+dia em 1 nó. Para Entrada e CargaInicial mantém timestamp
   // exato pra permitir ordenação cronológica (não agrupa eventos individuais).
@@ -89,7 +93,7 @@ export function EstoqueTimeline({ produtoId, local, quantidadeAtual, unidadeMedi
     movId?: string // id da movimentação individual (apenas quando count === 1)
   }
   const groups: Event[] = []
-  for (const m of movs) {
+  for (const m of movsEfetivos) {
     const dia = m.dataMov.slice(0, 10)
     const isColibri = m.tipoMov === 'Saida' && m.observacao?.includes('Colibri')
     const tipoKey = isColibri ? 'Colibri' : m.tipoMov

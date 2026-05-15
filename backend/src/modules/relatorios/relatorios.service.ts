@@ -1,11 +1,12 @@
 import { prisma } from '../../config/prisma.js'
+import { parseLocalDate } from '../../shared/dateLocal.js'
 
 export async function macro(dataInicio?: string, dataFim?: string) {
   const whereData: any = {}
   if (dataInicio || dataFim) {
     whereData.dataMov = {}
-    if (dataInicio) whereData.dataMov.gte = new Date(dataInicio)
-    if (dataFim) whereData.dataMov.lte = new Date(dataFim)
+    if (dataInicio) whereData.dataMov.gte = parseLocalDate(dataInicio, '00:00:00')
+    if (dataFim) whereData.dataMov.lte = parseLocalDate(dataFim, '23:59:59')
   }
 
   const [estoque, movimentacoes, contagens, aprovacoesPendentes] = await Promise.all([
@@ -28,8 +29,8 @@ export async function saidas(filtros: { dataInicio?: string; dataFim?: string; l
   if (filtros.local) where.OR = [{ localOrigem: filtros.local }, { localDestino: filtros.local }]
   if (filtros.dataInicio || filtros.dataFim) {
     where.dataMov = {}
-    if (filtros.dataInicio) where.dataMov.gte = new Date(filtros.dataInicio)
-    if (filtros.dataFim) where.dataMov.lte = new Date(filtros.dataFim)
+    if (filtros.dataInicio) where.dataMov.gte = parseLocalDate(filtros.dataInicio, '00:00:00')
+    if (filtros.dataFim) where.dataMov.lte = parseLocalDate(filtros.dataFim, '23:59:59')
   }
 
   return prisma.movimentacaoEstoque.findMany({
@@ -46,8 +47,8 @@ export async function perdas(filtros: { dataInicio?: string; dataFim?: string })
   const where: any = { tipoMov: 'AjustePerda' }
   if (filtros.dataInicio || filtros.dataFim) {
     where.dataMov = {}
-    if (filtros.dataInicio) where.dataMov.gte = new Date(filtros.dataInicio)
-    if (filtros.dataFim) where.dataMov.lte = new Date(filtros.dataFim)
+    if (filtros.dataInicio) where.dataMov.gte = parseLocalDate(filtros.dataInicio, '00:00:00')
+    if (filtros.dataFim) where.dataMov.lte = parseLocalDate(filtros.dataFim, '23:59:59')
   }
 
   return prisma.movimentacaoEstoque.findMany({
@@ -65,8 +66,8 @@ export async function divergencias(dataInicio?: string, dataFim?: string) {
   const where: any = { status: 'Fechada', totalDesvios: { gt: 0 } }
   if (dataInicio || dataFim) {
     where.dataFechamento = {}
-    if (dataInicio) where.dataFechamento.gte = new Date(dataInicio)
-    if (dataFim) where.dataFechamento.lte = new Date(dataFim)
+    if (dataInicio) where.dataFechamento.gte = parseLocalDate(dataInicio, '00:00:00')
+    if (dataFim) where.dataFechamento.lte = parseLocalDate(dataFim, '23:59:59')
   }
 
   return prisma.contagemEstoque.findMany({
