@@ -14,18 +14,27 @@ const config: ExpoConfig = {
     resizeMode: 'contain',
     backgroundColor: '#1a4731',
   },
+  updates: {
+    url: 'https://u.expo.dev/cd39d19e-0542-4f2b-bd1f-e5908571d51c',
+  },
   android: {
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#1a4731',
     },
     package: 'com.pizzadofabio.bebidas',
+    runtimeVersion: { policy: 'appVersion' },
   },
   ios: {
     bundleIdentifier: 'com.pizzadofabio.bebidas',
     supportsTablet: false,
   },
   plugins: ['expo-asset', 'expo-secure-store', 'expo-local-authentication'],
+  extra: {
+    eas: {
+      projectId: 'cd39d19e-0542-4f2b-bd1f-e5908571d51c',
+    },
+  },
 }
 
 export default config
