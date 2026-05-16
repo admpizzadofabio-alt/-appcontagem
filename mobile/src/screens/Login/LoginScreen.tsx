@@ -68,18 +68,23 @@ export function LoginScreen() {
       } catch (e: any) {
         shakePin()
         const status = e?.response?.status
-        const headers = e?.response?.headers ?? {}
-        const remaining = Number(headers['x-ratelimit-remaining'] ?? headers['ratelimit-remaining'] ?? NaN)
-        const resetSec = Number(headers['x-ratelimit-reset'] ?? headers['ratelimit-reset'] ?? NaN)
+        const rawHeaders = e?.response?.headers
+        const headers: Record<string, any> = typeof rawHeaders?.toJSON === 'function' ? rawHeaders.toJSON() : (rawHeaders ?? {})
+        const lower: Record<string, any> = {}
+        for (const k of Object.keys(headers)) lower[k.toLowerCase()] = headers[k]
+        const remaining = Number(lower['x-ratelimit-remaining'] ?? lower['ratelimit-remaining'] ?? NaN)
+        const resetSec = Number(lower['x-ratelimit-reset'] ?? lower['ratelimit-reset'] ?? NaN)
         if (status === 429) {
           const mins = Number.isFinite(resetSec) ? Math.max(1, Math.ceil((resetSec - Date.now()/1000) / 60)) : 15
           toast.error(`Muitas tentativas. Aguarde ${mins} min.`)
-        } else if (Number.isFinite(remaining) && remaining <= 0) {
-          toast.error('Última tentativa antes do bloqueio.')
-        } else if (Number.isFinite(remaining)) {
-          toast.error(`PIN inválido — ${remaining} tentativa${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`)
+        } else if (status === 401) {
+          if (Number.isFinite(remaining) && remaining <= 0) toast.error('Última tentativa antes do bloqueio.')
+          else if (Number.isFinite(remaining)) toast.error(`PIN inválido — ${remaining} tentativa${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`)
+          else toast.error('PIN inválido. Tente novamente.')
+        } else if (!e?.response) {
+          toast.error('Sem conexão com o servidor. Verifique sua internet.')
         } else {
-          toast.error('PIN inválido. Tente novamente.')
+          toast.error(`Erro ${status}: ${(e?.response?.data?.message ?? '').toString().slice(0, 80)}`)
         }
         setPin('')
       } finally {

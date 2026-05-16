@@ -1,8 +1,7 @@
 import axios from 'axios'
 import { storage, KEYS } from './storage'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL
-if (!API_URL) throw new Error('EXPO_PUBLIC_API_URL não configurada. Defina no arquivo .env')
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://contagem.sistemaspizzafabio.com.br/api/v1'
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -23,6 +22,10 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
     if (error.response?.status !== 401 || original._retry) return Promise.reject(error)
+    // Não tentar refresh em /auth/login e /auth/refresh — 401 nesses casos é credencial errada,
+    // não token expirado.
+    const url: string = original?.url ?? ''
+    if (url.includes('/auth/login') || url.includes('/auth/refresh')) return Promise.reject(error)
     original._retry = true
 
     if (isRefreshing) {

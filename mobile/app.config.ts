@@ -14,6 +14,7 @@ const config: ExpoConfig = {
     resizeMode: 'contain',
     backgroundColor: '#1a4731',
   },
+  runtimeVersion: { policy: 'appVersion' },
   updates: {
     url: 'https://u.expo.dev/cd39d19e-0542-4f2b-bd1f-e5908571d51c',
   },
