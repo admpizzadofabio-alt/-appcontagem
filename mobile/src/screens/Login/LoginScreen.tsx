@@ -76,7 +76,7 @@ export function LoginScreen() {
           toast.error(`Muitas tentativas. Aguarde ${mins} min.`)
         } else if (Number.isFinite(remaining) && remaining <= 0) {
           toast.error('Última tentativa antes do bloqueio.')
-        } else if (Number.isFinite(remaining) && remaining <= 3) {
+        } else if (Number.isFinite(remaining)) {
           toast.error(`PIN inválido — ${remaining} tentativa${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`)
         } else {
           toast.error('PIN inválido. Tente novamente.')
