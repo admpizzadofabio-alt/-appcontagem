@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Animated, Easing } from 'react-native'
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Animated, Easing, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { useAuth } from '../../contexts/AuthContext'
@@ -84,7 +84,7 @@ export function LoginScreen() {
     <SafeAreaView style={s.safe}>
       <View style={s.top}>
         <Animated.View style={[s.logoBox, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-          <Text style={s.logoEmoji}>🍕</Text>
+          <Image source={require('../../../assets/icon.png')} style={s.logoImage} resizeMode="contain" />
         </Animated.View>
         <Animated.Text style={[s.brand, { opacity: brandOpacity, transform: [{ translateY: brandY }] }]}>
           Pizza do Fábio
@@ -131,6 +131,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   logoEmoji: { fontSize: 44 },
+  logoImage: { width: 78, height: 78, borderRadius: 18 },
   brand: { color: '#fff', fontSize: 26, fontWeight: '800' },
   tagline: { color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '500' },
   card: {
