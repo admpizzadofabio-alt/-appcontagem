@@ -9,7 +9,7 @@ const totpCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Código TOT
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 50,
   skip: () => process.env.NODE_ENV === 'test',
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas tentativas. Tente em 15 minutos.' },
 })
