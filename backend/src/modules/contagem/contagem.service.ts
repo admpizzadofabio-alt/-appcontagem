@@ -6,11 +6,24 @@ export async function iniciar(local: string, operadorId: string, modoCego = true
   const aberta = await prisma.contagemEstoque.findFirst({ where: { local, status: StatusContagem.Aberta } })
   if (aberta) throw new AppError('Já existe uma contagem aberta para este local', 409, 'CONTAGEM_JA_ABERTA')
 
-  // Busca todos os produtos ativos do setor (igual ao abrirTurno)
+  // Só produtos com carga inicial entram — sem marco inicial não há estoque
+  // de referência para comparar com a contagem.
   const produtos = await prisma.produto.findMany({
-    where: { ativo: true, OR: [{ setorPadrao: local }, { setorPadrao: 'Todos' }] },
+    where: {
+      ativo: true,
+      marcoInicialEm: { not: null },
+      OR: [{ setorPadrao: local }, { setorPadrao: 'Todos' }],
+    },
     orderBy: { nomeBebida: 'asc' },
   })
+
+  if (produtos.length === 0) {
+    throw new AppError(
+      `Nenhum produto de "${local}" tem carga inicial. Cadastre a carga antes de iniciar uma contagem.`,
+      409,
+      'SEM_CARGA_INICIAL',
+    )
+  }
 
   // Para cada produto, pega a quantidade atual em estoque (0 se ainda não tiver)
   const itensData = await Promise.all(

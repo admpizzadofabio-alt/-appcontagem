@@ -65,9 +65,22 @@ export function LoginScreen() {
       setLoading(true)
       try {
         await signIn(value, true)
-      } catch {
+      } catch (e: any) {
         shakePin()
-        toast.error('PIN inválido. Tente novamente.')
+        const status = e?.response?.status
+        const headers = e?.response?.headers ?? {}
+        const remaining = Number(headers['x-ratelimit-remaining'] ?? headers['ratelimit-remaining'] ?? NaN)
+        const resetSec = Number(headers['x-ratelimit-reset'] ?? headers['ratelimit-reset'] ?? NaN)
+        if (status === 429) {
+          const mins = Number.isFinite(resetSec) ? Math.max(1, Math.ceil((resetSec - Date.now()/1000) / 60)) : 15
+          toast.error(`Muitas tentativas. Aguarde ${mins} min.`)
+        } else if (Number.isFinite(remaining) && remaining <= 0) {
+          toast.error('Última tentativa antes do bloqueio.')
+        } else if (Number.isFinite(remaining) && remaining <= 3) {
+          toast.error(`PIN inválido — ${remaining} tentativa${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`)
+        } else {
+          toast.error('PIN inválido. Tente novamente.')
+        }
         setPin('')
       } finally {
         setLoading(false)
@@ -124,14 +137,12 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.primary, justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 20 },
   top: { alignItems: 'center', gap: 8, paddingTop: 16 },
   logoBox: {
-    width: 88, height: 88, borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 140, height: 140, borderRadius: 36,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   logoEmoji: { fontSize: 44 },
-  logoImage: { width: 78, height: 78, borderRadius: 18 },
+  logoImage: { width: 140, height: 140, borderRadius: 32 },
   brand: { color: '#fff', fontSize: 26, fontWeight: '800' },
   tagline: { color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '500' },
   card: {

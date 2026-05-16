@@ -165,6 +165,12 @@ export async function abrirTurno(local: string, operadorId: string, operadorSeto
       orderBy: { nomeBebida: 'asc' },
     })
 
+    if (produtos.length === 0) {
+      throw new BusinessRuleError(
+        `Nenhum produto de "${local}" tem carga inicial. Cadastre a carga antes de abrir o turno.`,
+      )
+    }
+
     const contagem = await tx.contagemEstoque.create({
       data: {
         local,
