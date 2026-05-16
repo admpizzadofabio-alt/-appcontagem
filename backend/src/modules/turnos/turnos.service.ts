@@ -244,7 +244,7 @@ export async function listarItensContagem(contagemId: string) {
     where: { id: contagemId },
     include: {
       itens: {
-        include: { produto: { select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true } } },
+        include: { produto: { select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true, imagem: true } } },
         orderBy: { id: 'asc' },
       },
     },

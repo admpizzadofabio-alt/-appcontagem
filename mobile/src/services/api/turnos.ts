@@ -48,7 +48,7 @@ export type ItemContagemCego = {
   produtoId: string
   quantidadeContada: number
   contadoPor?: string | null
-  produto: { id: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number }
+  produto: { id: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number; imagem?: string | null }
 }
 
 export type ContagemDetalheCega = Omit<ContagemDetalhe, 'itens'> & { itens: ItemContagemCego[] }

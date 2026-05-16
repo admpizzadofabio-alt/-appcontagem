@@ -7,7 +7,8 @@ export type ContagemItem = {
   quantidadeContada: number
   diferenca: number
   causaDivergencia?: string
-  produto: { nomeBebida: string; categoria: string; unidadeMedida: string; setorPadrao?: string }
+  contadoPor?: string
+  produto: { nomeBebida: string; categoria: string; unidadeMedida: string; setorPadrao?: string; imagem?: string | null }
 }
 
 export type Contagem = {

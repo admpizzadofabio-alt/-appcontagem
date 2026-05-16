@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import {
   View, Text, StyleSheet, Alert, TextInput,
   TouchableOpacity, ActivityIndicator, FlatList,
+  Image, Modal, Pressable,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native'
@@ -37,6 +38,8 @@ export function ContagemTurnoScreen() {
   const [quantidades, setQuantidades] = useState<Record<string, string>>({})
   const [editando,    setEditando]    = useState<string | null>(null)
   const [ordem,       setOrdem]       = useState<string[]>([])
+  const [calcProdId,  setCalcProdId]  = useState<string | null>(null)
+  const [calcExpr,    setCalcExpr]    = useState('')
 
   // O backend já filtra produtos pelo local do turno (setorPadrao = local ou 'Todos')
   const itensOriginais = useMemo(() => contagem?.itens ?? [], [contagem])
@@ -68,6 +71,30 @@ export function ContagemTurnoScreen() {
       const novo  = Math.max(0, atual + delta)
       return { ...prev, [produtoId]: String(novo) }
     })
+  }
+
+  function calcPress(key: string) {
+    if (key === '⌫') { setCalcExpr((p) => p.slice(0, -1)); return }
+    if (key === 'C')  { setCalcExpr(''); return }
+    setCalcExpr((p) => p + key)
+  }
+
+  async function aplicarCalculo() {
+    if (!calcProdId) return
+    const limpo = calcExpr.replace(/×/g, '*').replace(/÷/g, '/').replace(/,/g, '.')
+    if (!/^[\d\s+\-*/.()]+$/.test(limpo)) { Alert.alert('Expressão inválida'); return }
+    let result: number
+    try {
+      // eslint-disable-next-line no-new-func
+      result = new Function(`return (${limpo})`)() as number
+      if (!isFinite(result) || result < 0) throw new Error()
+    } catch { Alert.alert('Expressão inválida'); return }
+    result = Math.round(result * 100) / 100
+    setQuantidades((p) => ({ ...p, [calcProdId]: String(result) }))
+    try { await registrar({ contagemId, produtoId: calcProdId, quantidadeContada: result }).unwrap() }
+    catch (e: any) { Alert.alert('Erro', e.message) }
+    setCalcProdId(null)
+    setCalcExpr('')
   }
 
   async function salvarItem(produtoId: string) {
@@ -165,9 +192,13 @@ export function ContagemTurnoScreen() {
             <Text style={[s.moveTxt, index === 0 && s.moveOff]}>▲</Text>
           </TouchableOpacity>
 
-          <View style={[s.iconBox, { backgroundColor: bgCor }]}>
-            <Text style={s.iconTxt}>{icone}</Text>
-          </View>
+          {item.produto.imagem ? (
+            <Image source={{ uri: item.produto.imagem }} style={s.iconBox} resizeMode="cover" />
+          ) : (
+            <View style={[s.iconBox, { backgroundColor: bgCor }]}>
+              <Text style={s.iconTxt}>{icone}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={s.moveBtn}
@@ -219,6 +250,14 @@ export function ContagemTurnoScreen() {
             activeOpacity={0.7}
           >
             <Text style={s.circleBtnPlusTxt}>+</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.calcBtn}
+            onPress={() => { setCalcProdId(item.produtoId); setCalcExpr('') }}
+            activeOpacity={0.7}
+          >
+            <Text style={s.calcBtnTxt}>🧮</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -275,6 +314,32 @@ export function ContagemTurnoScreen() {
           </TouchableOpacity>
         }
       />
+      {/* ── Calculadora ── */}
+      <Modal visible={calcProdId !== null} transparent animationType="slide">
+        <Pressable style={s.calcOverlay} onPress={() => setCalcProdId(null)}>
+          <Pressable style={s.calcModal} onPress={() => {}}>
+            <Text style={s.calcNome} numberOfLines={1}>
+              {itens.find((i) => i.produtoId === calcProdId)?.produto.nomeBebida}
+            </Text>
+            <Text style={s.calcDisplay}>{calcExpr || '0'}</Text>
+
+            {[['7','8','9','÷'],['4','5','6','×'],['1','2','3','−'],['C','0','⌫','+']].map((row) => (
+              <View key={row.join('')} style={s.calcRow}>
+                {row.map((k) => (
+                  <TouchableOpacity key={k} style={s.calcKey} onPress={() => calcPress(k)} activeOpacity={0.7}>
+                    <Text style={[s.calcKeyTxt, (k === 'C' || k === '⌫') && s.calcKeyAlt]}>{k}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+
+            <TouchableOpacity style={s.calcAplicar} onPress={aplicarCalculo} activeOpacity={0.85}>
+              <Text style={s.calcAplicarTxt}>Aplicar ✓</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
     </SafeAreaView>
   )
 }
@@ -414,4 +479,37 @@ const s = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
+
+  // Botão calculadora na linha
+  calcBtn: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  calcBtnTxt: { fontSize: 16 },
+
+  // Modal calculadora
+  calcOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  calcModal: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, gap: 12,
+  },
+  calcNome:    { fontSize: 14, fontWeight: '700', color: '#555', textAlign: 'center' },
+  calcDisplay: {
+    fontSize: 32, fontWeight: '700', color: '#1C1C1E', textAlign: 'right',
+    backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, minHeight: 64,
+  },
+  calcRow: { flexDirection: 'row', gap: 10 },
+  calcKey: {
+    flex: 1, height: 56, borderRadius: 14,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  calcKeyTxt: { fontSize: 22, fontWeight: '600', color: '#1C1C1E' },
+  calcKeyAlt: { color: '#E53935' },
+  calcAplicar: {
+    backgroundColor: BLUE, borderRadius: 14,
+    paddingVertical: 16, alignItems: 'center', marginTop: 4,
+  },
+  calcAplicarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
 })
