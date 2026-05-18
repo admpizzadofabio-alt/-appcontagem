@@ -181,9 +181,9 @@ export async function importarVendas(params: {
     const produtosAtualizados: Array<{ nome: string; quantidade: number; local: string }> = []
     const substituir = params.substituir !== false
 
-    await prisma.$transaction(async (tx) => {
-      // Modo idempotente: remove Saídas Colibri anteriores com MESMO refOrigem
-      if (substituir) {
+    // Substituir: desfaz importação anterior do mesmo período em transação própria
+    if (substituir) {
+      await prisma.$transaction(async (tx) => {
         const refLike = `colibri:${params.dataInicio}:${params.dataFim}`
         const movsAntigos = await tx.movimentacaoEstoque.findMany({
           where: {
@@ -217,65 +217,67 @@ export async function importarVendas(params: {
             where: { id: { in: movsAntigos.map((m) => m.id) } },
           })
         }
-      }
-
-      // DEDUP — carrega idItemVendas já processados em qualquer movimento Colibri restante.
-      // Evita duplicação quando 2 imports cobrem ranges diferentes que tocam a mesma venda
-      // (ex.: cron usa "ontem→hoje", manual usou "hoje→hoje").
-      const movsRestantes = await tx.movimentacaoEstoque.findMany({
-        where: {
-          tipoMov: 'Saida',
-          referenciaOrigem: { startsWith: 'colibri:' },
-          idItemVendasColibri: { not: null },
-        },
-        select: { idItemVendasColibri: true },
       })
-      const idsProcessados = new Set<string>()
-      for (const m of movsRestantes) {
-        if (!m.idItemVendasColibri) continue
-        try {
-          const arr: string[] = JSON.parse(m.idItemVendasColibri)
-          for (const id of arr) idsProcessados.add(id)
-        } catch {
-          // JSON malformado — ignora (não dedupa) ao invés de quebrar import
-        }
-      }
+    }
 
-      // Agrega vendas após dedup e marco, mantendo lista de idItemVendas por produto
-      const totaisPorProduto = new Map<string, {
-        quantidade: number; produtoId: string; local: string; ids: string[]
-      }>()
-      for (const venda of vendasAposMarco) {
-        if (venda.idItemVenda && idsProcessados.has(venda.idItemVenda)) {
-          dedupSkip++
-          continue
-        }
-        const mapeamento = mapaCode.get(venda.productCode.toLowerCase())!
-        const key = mapeamento.produtoId
-        const qtd = venda.quantitySold * mapeamento.fatorConv
-        const setor = setorPorProduto.get(mapeamento.produtoId) ?? 'Bar'
-        const localProduto = setor === 'Delivery' ? 'Delivery' : 'Bar'
-        const atual = totaisPorProduto.get(key)
-        if (atual) {
-          atual.quantidade += qtd
-          if (venda.idItemVenda) atual.ids.push(venda.idItemVenda)
-        } else {
-          totaisPorProduto.set(key, {
-            quantidade: qtd,
-            produtoId: mapeamento.produtoId,
-            local: localProduto,
-            ids: venda.idItemVenda ? [venda.idItemVenda] : [],
-          })
-        }
+    // DEDUP — carrega idItemVendas já processados em qualquer movimento Colibri restante.
+    // Evita duplicação quando 2 imports cobrem ranges diferentes que tocam a mesma venda
+    // (ex.: cron usa "ontem→hoje", manual usou "hoje→hoje").
+    const movsRestantes = await prisma.movimentacaoEstoque.findMany({
+      where: {
+        tipoMov: 'Saida',
+        referenciaOrigem: { startsWith: 'colibri:' },
+        idItemVendasColibri: { not: null },
+      },
+      select: { idItemVendasColibri: true },
+    })
+    const idsProcessados = new Set<string>()
+    for (const m of movsRestantes) {
+      if (!m.idItemVendasColibri) continue
+      try {
+        const arr: string[] = JSON.parse(m.idItemVendasColibri)
+        for (const id of arr) idsProcessados.add(id)
+      } catch {
+        // JSON malformado — ignora (não dedupa) ao invés de quebrar import
       }
+    }
 
-      for (const [produtoId, info] of totaisPorProduto) {
-        try {
+    // Agrega vendas após dedup e marco, mantendo lista de idItemVendas por produto
+    const totaisPorProduto = new Map<string, {
+      quantidade: number; produtoId: string; local: string; ids: string[]
+    }>()
+    for (const venda of vendasAposMarco) {
+      if (venda.idItemVenda && idsProcessados.has(venda.idItemVenda)) {
+        dedupSkip++
+        continue
+      }
+      const mapeamento = mapaCode.get(venda.productCode.toLowerCase())!
+      const key = mapeamento.produtoId
+      const qtd = venda.quantitySold * mapeamento.fatorConv
+      const setor = setorPorProduto.get(mapeamento.produtoId) ?? 'Bar'
+      const localProduto = setor === 'Delivery' ? 'Delivery' : 'Bar'
+      const atual = totaisPorProduto.get(key)
+      if (atual) {
+        atual.quantidade += qtd
+        if (venda.idItemVenda) atual.ids.push(venda.idItemVenda)
+      } else {
+        totaisPorProduto.set(key, {
+          quantidade: qtd,
+          produtoId: mapeamento.produtoId,
+          local: localProduto,
+          ids: venda.idItemVenda ? [venda.idItemVenda] : [],
+        })
+      }
+    }
+
+    // Cada produto em transação própria — falha isolada não contamina os demais
+    for (const [produtoId, info] of totaisPorProduto) {
+      let nomeProduto = ''
+      try {
+        await prisma.$transaction(async (tx) => {
           const produto = await tx.produto.findUnique({ where: { id: produtoId } })
-          if (!produto) {
-            erros.push(`Produto ${produtoId} não encontrado`)
-            continue
-          }
+          if (!produto) throw new Error(`Produto ${produtoId} não encontrado`)
+          nomeProduto = produto.nomeBebida
 
           const obs = `Importado do Colibri: ${params.dataInicio} a ${params.dataFim}`
 
@@ -319,31 +321,31 @@ export async function importarVendas(params: {
               }),
             },
           })
+        })
 
-          importados++
-          produtosAtualizados.push({
-            nome: produto.nomeBebida,
-            quantidade: Math.round(info.quantidade * 100) / 100,
-            local: info.local,
-          })
-        } catch (e: any) {
-          erros.push(`Produto ${produtoId}: ${e.message}`)
-        }
+        importados++
+        produtosAtualizados.push({
+          nome: nomeProduto,
+          quantidade: Math.round(info.quantidade * 100) / 100,
+          local: info.local,
+        })
+      } catch (e: any) {
+        erros.push(`Produto ${produtoId}: ${e.message}`)
       }
+    }
 
-      await tx.colibriImportacao.create({
-        data: {
-          dataInicio: new Date(params.dataInicio),
-          dataFim: new Date(params.dataFim),
-          usuarioId: params.usuarioId,
-          usuarioNome: params.usuarioNome,
-          totalVendas: vendas.length,
-          totalImportados: importados,
-          totalIgnorados: ignorados + semMarco + antesDoMarco + dedupSkip,
-          status: erros.length > 0 ? 'parcial' : 'ok',
-          erros: erros.length > 0 ? JSON.stringify(erros) : null,
-        },
-      })
+    await prisma.colibriImportacao.create({
+      data: {
+        dataInicio: new Date(params.dataInicio),
+        dataFim: new Date(params.dataFim),
+        usuarioId: params.usuarioId,
+        usuarioNome: params.usuarioNome,
+        totalVendas: vendas.length,
+        totalImportados: importados,
+        totalIgnorados: ignorados + semMarco + antesDoMarco + dedupSkip,
+        status: erros.length > 0 ? 'parcial' : 'ok',
+        erros: erros.length > 0 ? JSON.stringify(erros) : null,
+      },
     })
 
     return {

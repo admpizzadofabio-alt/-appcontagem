@@ -124,9 +124,10 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
 
   await prisma.$transaction(async (tx) => {
     for (const item of divergencias) {
-      await tx.estoqueAtual.updateMany({
-        where: { produtoId: item.produtoId, local: contagem.local },
-        data: { quantidadeAtual: item.quantidadeContada, atualizadoPor: operadorId },
+      await tx.estoqueAtual.upsert({
+        where: { produtoId_local: { produtoId: item.produtoId, local: contagem.local } },
+        update: { quantidadeAtual: item.quantidadeContada, atualizadoPor: operadorId },
+        create: { produtoId: item.produtoId, local: contagem.local, quantidadeAtual: item.quantidadeContada, atualizadoPor: operadorId },
       })
 
       await tx.movimentacaoEstoque.create({

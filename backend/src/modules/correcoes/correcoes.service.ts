@@ -63,7 +63,7 @@ export async function registrarCorrecao(data: {
     }
     await tx.estoqueAtual.update({
       where: { produtoId_local: { produtoId: data.produtoServidoId, local: data.local } },
-      data: { quantidadeAtual: qtdAtual - data.quantidade, atualizadoPor: data.operadorId },
+      data: { quantidadeAtual: { decrement: data.quantidade }, atualizadoPor: data.operadorId },
     })
 
     await tx.logAuditoria.create({
