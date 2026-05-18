@@ -388,7 +388,9 @@ export async function aprovar(aprovacaoId: string, aprovadorId: string, aprovado
     })
 
     const mov = aprovacao.movimentacao
-    await _upsertEstoque(tx, mov.produtoId, mov.localOrigem ?? 'Bar', -mov.quantidade, aprovadorId)
+    const estoqueLocal = mov.tipoMov === 'Entrada' ? (mov.localDestino ?? 'Bar') : (mov.localOrigem ?? 'Bar')
+    const estoqueDelta = mov.tipoMov === 'Entrada' ? mov.quantidade : -mov.quantidade
+    await _upsertEstoque(tx, mov.produtoId, estoqueLocal, estoqueDelta, aprovadorId)
 
     await tx.logAuditoria.create({
       data: {
