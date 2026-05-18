@@ -65,7 +65,8 @@ export async function getContagensAdmin(req: Request, res: Response, next: NextF
 export async function deleteContagem(req: Request, res: Response, next: NextFunction) {
   try {
     const motivo = String(req.body?.motivo ?? '')
-    await turnos.excluirContagemSomente(String(req.params.id), motivo, req.user!.sub)
+    const u = req.user!
+    await turnos.excluirContagemSomente(String(req.params.id), motivo, u.sub, u.nome, u.setor)
     res.json({ ok: true })
   } catch (e) { next(e) }
 }

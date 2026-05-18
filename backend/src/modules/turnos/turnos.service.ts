@@ -688,7 +688,7 @@ export async function listarContagensAdmin(filtros: { dataInicio?: string; dataF
 // Apaga APENAS o registro da contagem + items + rascunhos.
 // NÃO reverte estoque nem movimentações (uso: limpeza de histórico).
 // Para rollback completo use deletarTurno().
-export async function excluirContagemSomente(contagemId: string, motivo: string, adminId: string) {
+export async function excluirContagemSomente(contagemId: string, motivo: string, adminId: string, adminNome: string, adminSetor: string) {
   if (!motivo || motivo.trim().length < 10) {
     throw new BusinessRuleError('Motivo é obrigatório e deve ter pelo menos 10 caracteres')
   }
@@ -699,20 +699,22 @@ export async function excluirContagemSomente(contagemId: string, motivo: string,
   if (!contagem) throw new NotFoundError('Contagem não encontrada')
 
   await prisma.$transaction(async (tx) => {
-    // Limpa referências em turno (campo unique, deixar órfão quebraria FK)
+    // Limpa referência em turno (campo simples, não FK — mas mantém integridade lógica)
     await tx.fechamentoTurno.updateMany({
       where: { contagemId: contagem.id },
       data: { contagemId: null },
     })
-    // Cascade já apaga itens e rascunhos
+    // Cascade apaga itens e rascunhos. NÃO toca em EstoqueAtual nem MovimentacaoEstoque.
     await tx.contagemEstoque.delete({ where: { id: contagem.id } })
 
     await tx.logAuditoria.create({
       data: {
         usuarioId: adminId,
-        acao: 'ExcluirContagem',
-        recurso: 'ContagemEstoque',
-        recursoId: contagem.id,
+        usuarioNome: adminNome,
+        setor: adminSetor,
+        acao: 'EXCLUIR_CONTAGEM',
+        entidade: 'ContagemEstoque',
+        idReferencia: contagem.id,
         detalhes: JSON.stringify({
           motivo: motivo.trim(),
           local: contagem.local,
