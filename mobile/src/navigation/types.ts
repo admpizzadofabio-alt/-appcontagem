@@ -17,6 +17,7 @@ Pedidos: undefined
   Relatorios: undefined
   Analytics: undefined
   Auditoria: undefined
+  ContagensAdmin: undefined
   Setup2FA: undefined
   Admin: undefined
   Usuarios: undefined

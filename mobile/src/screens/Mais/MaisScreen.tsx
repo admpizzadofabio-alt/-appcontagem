@@ -104,6 +104,13 @@ export function MaisScreen() {
       role: 'Admin',
     },
     {
+      icon: '🗑️',
+      label: 'Excluir Contagem',
+      sub: 'Remover contagem do histórico (sem reverter estoque)',
+      onPress: () => navigation.navigate('ContagensAdmin'),
+      role: 'Admin',
+    },
+    {
       icon: '🔐',
       label: 'Autenticação 2 Fatores',
       sub: 'Adicionar código TOTP no login',

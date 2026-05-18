@@ -665,6 +665,67 @@ export async function verificarEntradaRecente(produtoId: string, quantidade: num
   return { tipo: 'aviso' as const, recentes }
 }
 
+// Lista contagens com filtros — usado pela tela admin de gerenciamento
+export async function listarContagensAdmin(filtros: { dataInicio?: string; dataFim?: string; local?: string }) {
+  const where: any = {}
+  if (filtros.local) where.local = filtros.local
+  if (filtros.dataInicio || filtros.dataFim) {
+    where.dataAbertura = {}
+    if (filtros.dataInicio) where.dataAbertura.gte = parseLocalDate(filtros.dataInicio, '00:00:00')
+    if (filtros.dataFim)    where.dataAbertura.lte = parseLocalDate(filtros.dataFim, '23:59:59')
+  }
+  return prisma.contagemEstoque.findMany({
+    where,
+    orderBy: { dataAbertura: 'desc' },
+    take: 100,
+    include: {
+      operador: { select: { nome: true } },
+      _count: { select: { itens: true } },
+    },
+  })
+}
+
+// Apaga APENAS o registro da contagem + items + rascunhos.
+// NÃO reverte estoque nem movimentações (uso: limpeza de histórico).
+// Para rollback completo use deletarTurno().
+export async function excluirContagemSomente(contagemId: string, motivo: string, adminId: string) {
+  if (!motivo || motivo.trim().length < 10) {
+    throw new BusinessRuleError('Motivo é obrigatório e deve ter pelo menos 10 caracteres')
+  }
+  const contagem = await prisma.contagemEstoque.findUnique({
+    where: { id: contagemId },
+    include: { _count: { select: { itens: true } } },
+  })
+  if (!contagem) throw new NotFoundError('Contagem não encontrada')
+
+  await prisma.$transaction(async (tx) => {
+    // Limpa referências em turno (campo unique, deixar órfão quebraria FK)
+    await tx.fechamentoTurno.updateMany({
+      where: { contagemId: contagem.id },
+      data: { contagemId: null },
+    })
+    // Cascade já apaga itens e rascunhos
+    await tx.contagemEstoque.delete({ where: { id: contagem.id } })
+
+    await tx.logAuditoria.create({
+      data: {
+        usuarioId: adminId,
+        acao: 'ExcluirContagem',
+        recurso: 'ContagemEstoque',
+        recursoId: contagem.id,
+        detalhes: JSON.stringify({
+          motivo: motivo.trim(),
+          local: contagem.local,
+          dataAbertura: contagem.dataAbertura.toISOString(),
+          status: contagem.status,
+          totalItens: contagem._count.itens,
+        }),
+      },
+    })
+  })
+  logger.warn({ contagemId, adminId, motivo }, 'Contagem excluída do histórico (sem rollback de estoque)')
+}
+
 export async function listarHistoricoTurnos(local?: string, limit = 30) {
   return prisma.fechamentoTurno.findMany({
     where: local ? { local } : {},

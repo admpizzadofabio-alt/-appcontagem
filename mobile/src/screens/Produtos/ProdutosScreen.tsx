@@ -135,6 +135,7 @@ export function ProdutosScreen() {
     setEditMinimo(p.estoqueMinimo > 0 ? String(p.estoqueMinimo) : '')
     setEditThreshold(String(p.perdaThreshold ?? 5))
     setEditSetor((p.setorPadrao as Setor) ?? 'Todos')
+    setEditImagem(p.imagem ?? null)
   }
 
   async function handleSalvarEdicao() {
@@ -148,6 +149,7 @@ export function ProdutosScreen() {
         estoqueMinimo: parseFloat(editMinimo) || 0,
         perdaThreshold: parseFloat(editThreshold) || 5,
         setorPadrao: editSetor,
+        imagem: editImagem ?? undefined,
       }).unwrap()
       setEditProd(null)
     } catch (e: any) { Alert.alert('Erro', e.message) }
@@ -400,31 +402,38 @@ export function ProdutosScreen() {
       <Modal visible={editProd !== null} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={s.modal}>
-            <Text style={s.modalTitle}>Editar Produto</Text>
-            <Text style={s.modalSub}>{editProd?.nomeBebida}</Text>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={s.modalScroll}>
+            <View>
+              <Text style={s.modalTitle}>Editar Produto</Text>
+              <Text style={s.modalSub}>{editProd?.nomeBebida}</Text>
+            </View>
 
-            <Text style={s.fieldLabel}>Nome</Text>
-            <TextInput
-              style={s.input}
-              value={editNome}
-              onChangeText={setEditNome}
-              placeholder="Nome do produto"
-              placeholderTextColor={colors.textMuted}
-            />
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>Nome</Text>
+              <TextInput
+                style={s.input}
+                value={editNome}
+                onChangeText={setEditNome}
+                placeholder="Nome do produto"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
 
-            <Text style={s.fieldLabel}>Setor *</Text>
-            <View style={s.chipRow}>
-              {SETORES.map((st) => (
-                <TouchableOpacity
-                  key={st}
-                  style={[s.chip, s.chipLarge, editSetor === st && s.chipActive]}
-                  onPress={() => setEditSetor(st)}
-                >
-                  <Text style={[s.chipText, editSetor === st && s.chipTextActive]}>
-                    {SETOR_LABEL[st]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>Setor *</Text>
+              <View style={s.chipRow}>
+                {SETORES.map((st) => (
+                  <TouchableOpacity
+                    key={st}
+                    style={[s.chip, s.chipLarge, editSetor === st && s.chipActive]}
+                    onPress={() => setEditSetor(st)}
+                  >
+                    <Text style={[s.chipText, editSetor === st && s.chipTextActive]}>
+                      {SETOR_LABEL[st]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Estoque mínimo em destaque */}
@@ -471,6 +480,17 @@ export function ProdutosScreen() {
               </View>
             </View>
 
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>📸 Foto (opcional)</Text>
+              {editImagem && <Image source={{ uri: editImagem }} style={s.fotoPreview} />}
+              <TouchableOpacity style={s.fotoBtn} onPress={async () => {
+                const img = await pickPhoto()
+                if (img) setEditImagem(img)
+              }}>
+                <Text style={s.fotoBtnTxt}>{editImagem ? '🔄 Trocar foto' : '📷 Tirar foto'}</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={s.modalAcoes}>
               <Pressable style={s.btnCancelar} onPress={() => setEditProd(null)}>
                 <Text style={s.btnCancelarTxt}>Cancelar</Text>
@@ -502,6 +522,7 @@ export function ProdutosScreen() {
                 <Text style={s.btnReativarModalTxt}>Reativar produto</Text>
               </Pressable>
             )}
+          </ScrollView>
           </View>
         </View>
       </Modal>
@@ -571,7 +592,9 @@ const s = StyleSheet.create({
 
   // Modal edição
   overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modal:      { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, maxHeight: '90%' },
+  modal:      { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
+  modalScroll: { gap: 20, paddingBottom: 24 },
+  fieldGroup:  { gap: 8 },
   modalTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
   modalSub:   { fontSize: 13, color: colors.textSub, marginTop: -6 },
   modalAcoes: { flexDirection: 'row', gap: 10, marginTop: 4 },

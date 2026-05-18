@@ -52,6 +52,24 @@ export async function getHistorico(req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e) }
 }
 
+export async function getContagensAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await turnos.listarContagensAdmin({
+      dataInicio: req.query.dataInicio as string | undefined,
+      dataFim:    req.query.dataFim    as string | undefined,
+      local:      req.query.local      as string | undefined,
+    }))
+  } catch (e) { next(e) }
+}
+
+export async function deleteContagem(req: Request, res: Response, next: NextFunction) {
+  try {
+    const motivo = String(req.body?.motivo ?? '')
+    await turnos.excluirContagemSomente(String(req.params.id), motivo, req.user!.sub)
+    res.json({ ok: true })
+  } catch (e) { next(e) }
+}
+
 export async function getContagem(req: Request, res: Response, next: NextFunction) {
   try {
     const id = String(req.params.id)

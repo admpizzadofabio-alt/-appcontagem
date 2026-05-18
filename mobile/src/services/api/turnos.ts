@@ -53,6 +53,18 @@ export type ItemContagemCego = {
 
 export type ContagemDetalheCega = Omit<ContagemDetalhe, 'itens'> & { itens: ItemContagemCego[] }
 
+export type ContagemAdminItem = {
+  id: string
+  local: string
+  status: string
+  dataAbertura: string
+  dataFechamento: string | null
+  totalItens: number
+  totalDesvios: number
+  operador: { nome: string }
+  _count: { itens: number }
+}
+
 export type ContagemDetalhe = {
   id: string
   local: string
@@ -180,6 +192,14 @@ export const turnosApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/turnos/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Turno', 'Contagem', 'Estoque', 'Movimentacoes'],
     }),
+    listarContagensAdmin: build.query<ContagemAdminItem[], { dataInicio?: string; dataFim?: string; local?: string }>({
+      query: (params) => ({ url: '/turnos/contagens', params }),
+      providesTags: ['Contagem'],
+    }),
+    excluirContagem: build.mutation<void, { id: string; motivo: string }>({
+      query: ({ id, motivo }) => ({ url: `/turnos/contagem/${id}`, method: 'DELETE', data: { motivo } }),
+      invalidatesTags: ['Contagem', 'Turno'],
+    }),
 
     revisoesPendentes: build.query<RevisaoPendente[], void>({
       query: () => ({ url: '/turnos/revisoes/pendentes' }),
@@ -211,4 +231,6 @@ export const {
   useDeletarTurnoMutation,
   useRevisoesPendentesQuery,
   useDecidirRevisaoMutation,
+  useListarContagensAdminQuery,
+  useExcluirContagemMutation,
 } = turnosApi

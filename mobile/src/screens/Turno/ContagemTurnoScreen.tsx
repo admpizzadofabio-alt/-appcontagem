@@ -41,6 +41,17 @@ export function ContagemTurnoScreen() {
   const [calcProdId,  setCalcProdId]  = useState<string | null>(null)
   const [calcExpr,    setCalcExpr]    = useState('')
 
+  const calcResultado = useMemo(() => {
+    if (!calcExpr) return null
+    try {
+      const limpo = calcExpr.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/,/g, '.')
+      if (!/^[\d\s+\-*/.()\\.]+$/.test(limpo)) return null
+      // eslint-disable-next-line no-new-func
+      const r = new Function(`return (${limpo})`)() as number
+      return isFinite(r) && r >= 0 ? Math.round(r * 100) / 100 : null
+    } catch { return null }
+  }, [calcExpr])
+
   // O backend já filtra produtos pelo local do turno (setorPadrao = local ou 'Todos')
   const itensOriginais = useMemo(() => contagem?.itens ?? [], [contagem])
 
@@ -80,18 +91,9 @@ export function ContagemTurnoScreen() {
   }
 
   async function aplicarCalculo() {
-    if (!calcProdId) return
-    const limpo = calcExpr.replace(/×/g, '*').replace(/÷/g, '/').replace(/,/g, '.')
-    if (!/^[\d\s+\-*/.()]+$/.test(limpo)) { Alert.alert('Expressão inválida'); return }
-    let result: number
-    try {
-      // eslint-disable-next-line no-new-func
-      result = new Function(`return (${limpo})`)() as number
-      if (!isFinite(result) || result < 0) throw new Error()
-    } catch { Alert.alert('Expressão inválida'); return }
-    result = Math.round(result * 100) / 100
-    setQuantidades((p) => ({ ...p, [calcProdId]: String(result) }))
-    try { await registrar({ contagemId, produtoId: calcProdId, quantidadeContada: result }).unwrap() }
+    if (!calcProdId || calcResultado === null) { Alert.alert('Expressão inválida'); return }
+    setQuantidades((p) => ({ ...p, [calcProdId]: String(calcResultado) }))
+    try { await registrar({ contagemId, produtoId: calcProdId, quantidadeContada: calcResultado }).unwrap() }
     catch (e: any) { Alert.alert('Erro', e.message) }
     setCalcProdId(null)
     setCalcExpr('')
@@ -216,6 +218,25 @@ export function ContagemTurnoScreen() {
           <Text style={s.prodUnit}>{item.produto.unidadeMedida}</Text>
         </View>
 
+        {/* Calculadora — centro da linha */}
+        <TouchableOpacity
+          style={s.calcBtn}
+          onPress={() => { setCalcProdId(item.produtoId); setCalcExpr('') }}
+          activeOpacity={0.7}
+        >
+          <View style={s.calcIcon}>
+            <View style={s.calcIconDisplay} />
+            <View style={s.calcIconRow}>
+              <View style={[s.calcIconKey, { backgroundColor: '#2d7a7a' }]}><Text style={s.calcIconTxt}>+</Text></View>
+              <View style={[s.calcIconKey, { backgroundColor: '#9b8ec4' }]}><Text style={s.calcIconTxt}>−</Text></View>
+            </View>
+            <View style={s.calcIconRow}>
+              <View style={[s.calcIconKey, { backgroundColor: '#2d7a7a' }]}><Text style={s.calcIconTxt}>×</Text></View>
+              <View style={[s.calcIconKey, { backgroundColor: '#F5A623' }]}><Text style={s.calcIconTxt}>=</Text></View>
+            </View>
+          </View>
+        </TouchableOpacity>
+
         {/* Controles − qty + */}
         <View style={s.rowRight}>
           <TouchableOpacity
@@ -250,14 +271,6 @@ export function ContagemTurnoScreen() {
             activeOpacity={0.7}
           >
             <Text style={s.circleBtnPlusTxt}>+</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={s.calcBtn}
-            onPress={() => { setCalcProdId(item.produtoId); setCalcExpr('') }}
-            activeOpacity={0.7}
-          >
-            <Text style={s.calcBtnTxt}>🧮</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -321,7 +334,12 @@ export function ContagemTurnoScreen() {
             <Text style={s.calcNome} numberOfLines={1}>
               {itens.find((i) => i.produtoId === calcProdId)?.produto.nomeBebida}
             </Text>
-            <Text style={s.calcDisplay}>{calcExpr || '0'}</Text>
+            <View style={s.calcDisplayBox}>
+              <Text style={s.calcExprTxt} numberOfLines={1}>{calcExpr || ' '}</Text>
+              <Text style={s.calcResultTxt}>
+                {calcResultado !== null ? calcResultado : (calcExpr ? '—' : '0')}
+              </Text>
+            </View>
 
             {[['7','8','9','÷'],['4','5','6','×'],['1','2','3','−'],['C','0','⌫','+']].map((row) => (
               <View key={row.join('')} style={s.calcRow}>
@@ -481,12 +499,20 @@ const s = StyleSheet.create({
   },
 
   // Botão calculadora na linha
-  calcBtn: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: '#F0F0F0',
+  calcBtn: { justifyContent: 'center', alignItems: 'center' },
+  calcIcon: {
+    width: 38, height: 38, borderRadius: 8,
+    backgroundColor: '#1C2B3A', padding: 4, gap: 3,
+  },
+  calcIconDisplay: {
+    backgroundColor: '#fff', borderRadius: 3, height: 8,
+  },
+  calcIconRow: { flexDirection: 'row', gap: 2, flex: 1 },
+  calcIconKey: {
+    flex: 1, borderRadius: 3,
     alignItems: 'center', justifyContent: 'center',
   },
-  calcBtnTxt: { fontSize: 16 },
+  calcIconTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
 
   // Modal calculadora
   calcOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
@@ -494,11 +520,13 @@ const s = StyleSheet.create({
     backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 20, gap: 12,
   },
-  calcNome:    { fontSize: 14, fontWeight: '700', color: '#555', textAlign: 'center' },
-  calcDisplay: {
-    fontSize: 32, fontWeight: '700', color: '#1C1C1E', textAlign: 'right',
-    backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, minHeight: 64,
+  calcNome:       { fontSize: 14, fontWeight: '700', color: '#555', textAlign: 'center' },
+  calcDisplayBox: {
+    backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16,
+    alignItems: 'flex-end', gap: 4,
   },
+  calcExprTxt:  { fontSize: 15, color: '#999', fontWeight: '400' },
+  calcResultTxt: { fontSize: 36, fontWeight: '700', color: '#1C1C1E' },
   calcRow: { flexDirection: 'row', gap: 10 },
   calcKey: {
     flex: 1, height: 56, borderRadius: 14,

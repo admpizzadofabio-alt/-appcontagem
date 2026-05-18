@@ -7,6 +7,8 @@ import {
   postFechar,
   deleteTurno,
   getHistorico,
+  getContagensAdmin,
+  deleteContagem,
   getContagem,
   getContagemCega,
   postContagemItem,
@@ -32,6 +34,8 @@ turnosRouter.delete('/:id', requireNivel(['Admin']), deleteTurno)
 turnosRouter.get('/historico', getHistorico)
 
 // Contagem
+turnosRouter.get('/contagens', requireNivel(['Admin']), getContagensAdmin)
+turnosRouter.delete('/contagem/:id', requireNivel(['Admin']), deleteContagem)
 turnosRouter.get('/contagem/:id/cega', getContagemCega)
 // VULN-009: resumo completo com quantidadeSistema permitido para Admin/Supervisor
 // OU para o operador que criou a contagem (necessário para resolver divergências).
