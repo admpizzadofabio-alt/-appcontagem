@@ -180,6 +180,12 @@ export function EstoqueScreen() {
                   </View>
                 </Card>
 
+                {historico.semAtividade && (
+                  <View style={s.semAtividadeBanner}>
+                    <Text style={s.semAtividadeTxt}>📭 Sem movimentações nesse dia — exibindo o estoque que estava registrado.</Text>
+                  </View>
+                )}
+
                 {/* Produtos do dia */}
                 {historico.produtos.map((p) => {
                   const temDiv = p.divergencia !== 0
@@ -346,6 +352,9 @@ const s = StyleSheet.create({
   resumoDiaItem: { alignItems: 'center', gap: 2 },
   resumoDiaVal: { fontSize: 18, fontWeight: '800', color: colors.text },
   resumoDiaLabel: { fontSize: 10, color: colors.textSub, textTransform: 'uppercase' },
+
+  semAtividadeBanner: { backgroundColor: colors.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.border },
+  semAtividadeTxt: { fontSize: 12, color: colors.textSub, textAlign: 'center' },
 
   fluxoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingTop: 4 },
   fluxoItem: { alignItems: 'center', minWidth: 52 },

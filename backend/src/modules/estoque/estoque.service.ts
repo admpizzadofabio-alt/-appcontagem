@@ -77,8 +77,6 @@ export async function ajustar(id: string, quantidade: number, usuarioId: string,
 }
 
 export async function historico(data: string, local: string) {
-  // Busca por data calendário (abertoEm). FechamentoTurno não tem relação Prisma
-  // com ContagemEstoque, então buscamos contagem manualmente via contagemId.
   const inicioDia = new Date(data + 'T00:00:00')
   const fimDia = new Date(data + 'T23:59:59')
   const turno = await prisma.fechamentoTurno.findFirst({
@@ -97,35 +95,26 @@ export async function historico(data: string, local: string) {
       })
     : null
 
-  // Sem turno: usa dia calendário inteiro.
-  // Com turno: usa janela [dataFechamento_da_contagem → fechadoEm_do_turno].
-  // Importante: NÃO usar abertoEm — abertoEm dispara import Colibri pré-contagem que
-  // já se reflete em quantidadeSistema (= abertura). Contar essas mesmas vendas aqui
-  // seria double-count. Movements relevantes são os DEPOIS da contagem ser finalizada.
-  const inicioMov = contagem?.dataFechamento ?? turno?.abertoEm ?? inicioDia
-  const fimMov = turno?.fechadoEm ?? (turno ? new Date() : fimDia)
-  const movs = await prisma.movimentacaoEstoque.findMany({
-    where: {
-      dataMov: { gte: inicioMov, lte: fimMov },
-      OR: [{ localOrigem: local }, { localDestino: local }],
-      aprovacaoStatus: 'Aprovado',
-    },
-    select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, referenciaOrigem: true },
-  })
+  // CASO 1: turno com contagem — lógica original intacta
+  // Movimentos contam apenas APÓS a contagem (evita double-count com quantidadeSistema)
+  if (turno && contagem) {
+    const inicioMov = contagem.dataFechamento ?? turno.abertoEm
+    const fimMov = turno.fechadoEm ?? new Date()
+    const movs = await prisma.movimentacaoEstoque.findMany({
+      where: {
+        dataMov: { gte: inicioMov, lte: fimMov },
+        OR: [{ localOrigem: local }, { localDestino: local }],
+        aprovacaoStatus: 'Aprovado',
+      },
+      select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, referenciaOrigem: true },
+    })
 
-  // Sem turno e sem movimentos: realmente não houve atividade no dia
-  if (!turno && movs.length === 0) {
-    return { temDados: false, data, local, resumo: null, produtos: [] }
-  }
-
-  type ProdEntry = {
-    produtoId: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number
-    abertura: number; contado: number; divergencia: number
-    colibri: number; entradas: number; perdas: number; fechamento: number
-  }
-  const map = new Map<string, ProdEntry>()
-
-  if (contagem) {
+    type ProdEntry = {
+      produtoId: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number
+      abertura: number; contado: number; divergencia: number
+      colibri: number; entradas: number; perdas: number; fechamento: number
+    }
+    const map = new Map<string, ProdEntry>()
     for (const item of contagem.itens) {
       map.set(item.produtoId, {
         produtoId: item.produtoId,
@@ -139,51 +128,130 @@ export async function historico(data: string, local: string) {
         colibri: 0, entradas: 0, perdas: 0, fechamento: 0,
       })
     }
-  }
-
-  // Produtos que tiveram movimento mas não estavam na contagem (ex.: entrada no meio do turno)
-  const produtoIdsMovsSemEntry = movs
-    .map((m) => m.produtoId)
-    .filter((id) => !map.has(id))
-  if (produtoIdsMovsSemEntry.length > 0) {
-    const extras = await prisma.produto.findMany({
-      where: { id: { in: produtoIdsMovsSemEntry } },
-      select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true },
-    })
-    for (const p of extras) {
-      map.set(p.id, {
-        produtoId: p.id, nomeBebida: p.nomeBebida, categoria: p.categoria, unidadeMedida: p.unidadeMedida, custoUnitario: p.custoUnitario,
-        abertura: 0, contado: 0, divergencia: 0,
-        colibri: 0, entradas: 0, perdas: 0, fechamento: 0,
+    const semEntry = movs.map((m) => m.produtoId).filter((id) => !map.has(id))
+    if (semEntry.length > 0) {
+      const extras = await prisma.produto.findMany({
+        where: { id: { in: semEntry } },
+        select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true },
       })
+      for (const p of extras) {
+        map.set(p.id, { produtoId: p.id, nomeBebida: p.nomeBebida, categoria: p.categoria, unidadeMedida: p.unidadeMedida, custoUnitario: p.custoUnitario, abertura: 0, contado: 0, divergencia: 0, colibri: 0, entradas: 0, perdas: 0, fechamento: 0 })
+      }
+    }
+    for (const m of movs) {
+      const p = map.get(m.produtoId)
+      if (!p) continue
+      if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:')) p.colibri += m.quantidade
+      else if (m.tipoMov === 'Entrada') p.entradas += m.quantidade
+      else if (m.tipoMov === 'AjustePerda') p.perdas += m.quantidade
+    }
+    const produtos = Array.from(map.values())
+      .map((p) => ({ ...p, fechamento: p.contado + p.entradas - p.colibri - p.perdas }))
+      .sort((a, b) => a.nomeBebida.localeCompare(b.nomeBebida))
+    return {
+      temDados: true, data, local,
+      turno: { abertoEm: turno.abertoEm, fechadoEm: turno.fechadoEm, status: turno.status },
+      resumo: {
+        totalDivergencias: produtos.filter((p) => p.divergencia !== 0).length,
+        totalColibri: produtos.reduce((a, p) => a + p.colibri, 0),
+        totalEntradas: produtos.reduce((a, p) => a + p.entradas, 0),
+        totalPerdas: produtos.reduce((a, p) => a + p.perdas, 0),
+      },
+      produtos,
     }
   }
 
-  for (const m of movs) {
-    const p = map.get(m.produtoId)
-    if (!p) continue
-    if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:')) p.colibri += m.quantidade
-    else if (m.tipoMov === 'Entrada') p.entradas += m.quantidade
-    else if (m.tipoMov === 'AjustePerda') p.perdas += m.quantidade
+  // CASO 2: sem turno ou turno sem contagem — snapshot retroativo via walk-forward
+  // Query única ordenada por data; passagem única calcula abertura (snapshot no limite do dia) e fechamento
+  const movsTodos = await prisma.movimentacaoEstoque.findMany({
+    where: {
+      dataMov: { lte: fimDia },
+      OR: [{ localOrigem: local }, { localDestino: local }],
+      aprovacaoStatus: 'Aprovado',
+    },
+    orderBy: { dataMov: 'asc' },
+    select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, localDestino: true, dataMov: true, referenciaOrigem: true },
+  })
+
+  const workMap = new Map<string, number>()
+  const aberturaMap = new Map<string, number>()
+  let aberturaSnapped = false
+
+  for (const m of movsTodos) {
+    if (!aberturaSnapped && m.dataMov >= inicioDia) {
+      for (const [k, v] of workMap) aberturaMap.set(k, v)
+      aberturaSnapped = true
+    }
+    const cur = workMap.get(m.produtoId) ?? 0
+    switch (m.tipoMov) {
+      case 'CargaInicial':
+        workMap.set(m.produtoId, m.quantidade)
+        break
+      case 'Entrada':
+        if (m.localDestino === local) workMap.set(m.produtoId, cur + m.quantidade)
+        break
+      case 'Saida':
+      case 'AjustePerda':
+        if (m.localOrigem === local) workMap.set(m.produtoId, cur - m.quantidade)
+        break
+      case 'Transferencia':
+        if (m.localOrigem === local)  workMap.set(m.produtoId, cur - m.quantidade)
+        if (m.localDestino === local) workMap.set(m.produtoId, (workMap.get(m.produtoId) ?? 0) + m.quantidade)
+        break
+      case 'AjusteContagem':
+        if (m.localDestino === local) workMap.set(m.produtoId, cur + m.quantidade)
+        if (m.localOrigem  === local) workMap.set(m.produtoId, cur - m.quantidade)
+        break
+    }
+  }
+  if (!aberturaSnapped) {
+    for (const [k, v] of workMap) aberturaMap.set(k, v)
   }
 
-  const produtos = Array.from(map.values()).map((p) => ({
-    ...p,
-    fechamento: p.contado + p.entradas - p.colibri - p.perdas,
-  })).sort((a, b) => a.nomeBebida.localeCompare(b.nomeBebida))
+  if (workMap.size === 0) {
+    return { temDados: false, data, local, resumo: null, produtos: [] }
+  }
+
+  const produtosInfo = await prisma.produto.findMany({
+    where: { id: { in: [...workMap.keys()] } },
+    select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true },
+  })
+
+  const movsDoDia = movsTodos.filter((m) => m.dataMov >= inicioDia)
+  const resumo = { totalDivergencias: 0, totalColibri: 0, totalEntradas: 0, totalPerdas: 0 }
+  for (const m of movsDoDia) {
+    if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:') && m.localOrigem === local)
+      resumo.totalColibri += m.quantidade
+    else if (m.tipoMov === 'Entrada' && m.localDestino === local) resumo.totalEntradas += m.quantidade
+    else if (m.tipoMov === 'AjustePerda' && m.localOrigem === local) resumo.totalPerdas += m.quantidade
+  }
+
+  const produtos = produtosInfo
+    .map((p) => ({
+      produtoId: p.id,
+      nomeBebida: p.nomeBebida,
+      categoria: p.categoria,
+      unidadeMedida: p.unidadeMedida,
+      custoUnitario: p.custoUnitario,
+      abertura: aberturaMap.get(p.id) ?? 0,
+      contado: 0,
+      divergencia: 0,
+      colibri: 0, entradas: 0, perdas: 0,
+      fechamento: workMap.get(p.id) ?? 0,
+    }))
+    .filter((p) => p.fechamento > 0)
+    .sort((a, b) => a.nomeBebida.localeCompare(b.nomeBebida))
+
+  if (produtos.length === 0) {
+    return { temDados: false, data, local, resumo: null, produtos: [] }
+  }
 
   return {
-    temDados: true,
-    data,
-    local,
+    temDados: true, data, local,
     turno: turno ? { abertoEm: turno.abertoEm, fechadoEm: turno.fechadoEm, status: turno.status } : null,
-    resumo: {
-      totalDivergencias: produtos.filter((p) => p.divergencia !== 0).length,
-      totalColibri: produtos.reduce((a, p) => a + p.colibri, 0),
-      totalEntradas: produtos.reduce((a, p) => a + p.entradas, 0),
-      totalPerdas: produtos.reduce((a, p) => a + p.perdas, 0),
-    },
+    resumo,
     produtos,
+    semAtividade: movsDoDia.length === 0,
   }
 }
 

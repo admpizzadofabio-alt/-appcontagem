@@ -31,6 +31,7 @@ export type EstoqueHistorico = {
   turno: { abertoEm: string; fechadoEm: string | null; status: string } | null
   resumo: { totalDivergencias: number; totalColibri: number; totalEntradas: number; totalPerdas: number } | null
   produtos: EstoqueHistoricoItem[]
+  semAtividade?: boolean
 }
 
 export type EstoqueSummary = {
