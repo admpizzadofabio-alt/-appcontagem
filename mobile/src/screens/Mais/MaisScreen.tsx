@@ -111,6 +111,13 @@ export function MaisScreen() {
       role: 'Admin',
     },
     {
+      icon: '⏮️',
+      label: 'Apagar Turno (Retroativo)',
+      sub: 'Rollback completo de turno antigo — reverte estoque e vendas',
+      onPress: () => navigation.navigate('TurnosAdmin'),
+      role: 'Admin',
+    },
+    {
       icon: '🔐',
       label: 'Autenticação 2 Fatores',
       sub: 'Adicionar código TOTP no login',

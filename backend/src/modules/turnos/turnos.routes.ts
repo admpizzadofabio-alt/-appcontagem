@@ -7,6 +7,7 @@ import {
   postFechar,
   deleteTurno,
   getHistorico,
+  getTurnosAdmin,
   getContagensAdmin,
   deleteContagem,
   getContagem,
@@ -32,6 +33,7 @@ turnosRouter.post('/abrir', postAbrir)
 turnosRouter.post('/:id/fechar', requireNivel(['Admin']), postFechar)
 turnosRouter.delete('/:id', requireNivel(['Admin']), deleteTurno)
 turnosRouter.get('/historico', getHistorico)
+turnosRouter.get('/admin/lista', requireNivel(['Admin']), getTurnosAdmin)
 
 // Contagem
 turnosRouter.get('/contagens', requireNivel(['Admin']), getContagensAdmin)

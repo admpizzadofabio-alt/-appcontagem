@@ -20,6 +20,7 @@ import { AnalyticsScreen } from '../screens/Admin/AnalyticsScreen'
 import { Setup2FAScreen } from '../screens/Admin/Setup2FAScreen'
 import { AuditoriaScreen } from '../screens/Admin/AuditoriaScreen'
 import { ContagensAdminScreen } from '../screens/Admin/ContagensAdminScreen'
+import { TurnosAdminScreen } from '../screens/Admin/TurnosAdminScreen'
 import { UsuariosScreen } from '../screens/Usuarios/UsuariosScreen'
 import { ProdutosScreen } from '../screens/Produtos/ProdutosScreen'
 import { ColibriScreen } from '../screens/Colibri/ColibriScreen'
@@ -89,6 +90,7 @@ function AppNavigator() {
       <AppStack.Screen name="Setup2FA" component={Setup2FAScreen} options={{ title: 'Autenticação 2 Fatores' }} />
       <AppStack.Screen name="Auditoria" component={AuditoriaScreen} options={{ title: 'Logs de Auditoria' }} />
       <AppStack.Screen name="ContagensAdmin" component={ContagensAdminScreen} options={{ title: 'Excluir Contagem' }} />
+      <AppStack.Screen name="TurnosAdmin" component={TurnosAdminScreen} options={{ title: 'Apagar Turno' }} />
       <AppStack.Screen name="Usuarios" component={UsuariosScreen} options={{ title: 'Usuários' }} />
       <AppStack.Screen name="Produtos" component={ProdutosScreen} options={{ title: 'Produtos' }} />
       <AppStack.Screen name="Colibri" component={ColibriScreen} options={{ title: 'Integração Colibri POS' }} />

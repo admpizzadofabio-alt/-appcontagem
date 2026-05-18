@@ -32,7 +32,12 @@ export async function getTurnoAtual(local: string) {
   return { ...turno, abertoPorNome: usuario?.nome ?? null, contagem, colibriPendente: !colibriRecente }
 }
 
-export async function deletarTurno(turnoId: string, usuarioSetor?: string, nivelAcesso?: string) {
+export async function deletarTurno(
+  turnoId: string,
+  usuarioSetor?: string,
+  nivelAcesso?: string,
+  auditInfo?: { adminId: string; adminNome: string; adminSetor: string; motivo?: string },
+) {
   const turno = await prisma.fechamentoTurno.findUnique({ where: { id: turnoId } })
   if (!turno) throw new NotFoundError('Turno não encontrado')
   // VULN-007: Supervisor só pode deletar turno do próprio setor
@@ -110,7 +115,55 @@ export async function deletarTurno(turnoId: string, usuarioSetor?: string, nivel
       await tx.contagemEstoque.delete({ where: { id: turno.contagemId } })
     }
     await tx.fechamentoTurno.delete({ where: { id: turnoId } })
+
+    if (auditInfo) {
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: auditInfo.adminId,
+          usuarioNome: auditInfo.adminNome,
+          setor: auditInfo.adminSetor,
+          acao: 'APAGAR_TURNO',
+          entidade: 'FechamentoTurno',
+          idReferencia: turnoId,
+          detalhes: JSON.stringify({
+            motivo: auditInfo.motivo?.trim() ?? '(sem motivo informado)',
+            local: turno.local,
+            diaOperacional: turno.diaOperacional,
+            abertoEm: turno.abertoEm.toISOString(),
+            fechadoEm: turno.fechadoEm?.toISOString() ?? null,
+            status: turno.status,
+            tinhaContagem: !!turno.contagemId,
+          }),
+        },
+      })
+    }
   })
+  logger.warn({ turnoId, admin: auditInfo?.adminId }, 'Turno apagado (rollback completo de estoque)')
+}
+
+// Lista turnos com filtros — admin pode buscar retroativamente
+export async function listarTurnosAdmin(filtros: { dataInicio?: string; dataFim?: string; local?: string }) {
+  const where: any = {}
+  if (filtros.local) where.local = filtros.local
+  if (filtros.dataInicio || filtros.dataFim) {
+    where.abertoEm = {}
+    if (filtros.dataInicio) where.abertoEm.gte = parseLocalDate(filtros.dataInicio, '00:00:00')
+    if (filtros.dataFim)    where.abertoEm.lte = parseLocalDate(filtros.dataFim, '23:59:59')
+  }
+  const turnos = await prisma.fechamentoTurno.findMany({
+    where,
+    orderBy: { abertoEm: 'desc' },
+    take: 100,
+  })
+  if (turnos.length === 0) return []
+  // Busca nomes dos operadores em batch
+  const userIds = [...new Set(turnos.map((t) => t.abertoPor))]
+  const users = await prisma.usuario.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, nome: true },
+  })
+  const nameMap = new Map(users.map((u) => [u.id, u.nome]))
+  return turnos.map((t) => ({ ...t, operadorNome: nameMap.get(t.abertoPor) ?? 'Desconhecido' }))
 }
 
 export async function abrirTurno(local: string, operadorId: string, operadorSetor?: string, nivelAcesso?: string) {

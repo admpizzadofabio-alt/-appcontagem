@@ -40,8 +40,22 @@ export async function postFechar(req: Request, res: Response, next: NextFunction
 
 export async function deleteTurno(req: Request, res: Response, next: NextFunction) {
   try {
-    await turnos.deletarTurno(String(req.params.id), req.user!.setor, req.user!.nivelAcesso)
+    const u = req.user!
+    const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo : undefined
+    await turnos.deletarTurno(String(req.params.id), u.setor, u.nivelAcesso, {
+      adminId: u.sub, adminNome: u.nome, adminSetor: u.setor, motivo,
+    })
     res.json({ ok: true })
+  } catch (e) { next(e) }
+}
+
+export async function getTurnosAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await turnos.listarTurnosAdmin({
+      dataInicio: req.query.dataInicio as string | undefined,
+      dataFim:    req.query.dataFim    as string | undefined,
+      local:      req.query.local      as string | undefined,
+    }))
   } catch (e) { next(e) }
 }
 
