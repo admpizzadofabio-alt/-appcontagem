@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { NotFoundError } from '../../shared/errors.js'
+import { logger } from '../../config/logger.js'
 import { formatLocalDate, localOntem, localNextDay, parseLocalDate } from '../../shared/dateLocal.js'
 import {
   fetchVendas,
