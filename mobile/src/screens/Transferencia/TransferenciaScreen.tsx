@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { useListarProdutosQuery } from '../../services/api/produtos'
 import { useCriarMovimentacaoMutation } from '../../services/api/movimentacoes'
-import { useLocalAcesso } from '../../hooks/useLocalAcesso'
+import { useLocalAcesso, type Local } from '../../hooks/useLocalAcesso'
 import { ActionButton } from '../../components/ActionButton'
 import { Card } from '../../components/Card'
 import { colors } from '../../theme/colors'
@@ -15,10 +15,11 @@ export function TransferenciaScreen() {
   const { data: produtos = [] } = useListarProdutosQuery({ ativo: true })
   const [criar, { isLoading }] = useCriarMovimentacaoMutation()
 
+  const TODOS_LOCAIS: Local[] = ['Bar', 'Delivery', 'Vinhos']
   const [produtoId, setProdutoId] = useState('')
   const [quantidade, setQuantidade] = useState('')
-  const [origem, setOrigem] = useState<'Bar' | 'Delivery'>(localOperador)
-  const [destino, setDestino] = useState<'Bar' | 'Delivery'>(localOposto)
+  const [origem, setOrigem] = useState<Local>(localOperador)
+  const [destino, setDestino] = useState<Local>(localOposto)
   const [busca, setBusca] = useState('')
 
   const filtrados = produtos.filter((p) => p.nomeBebida.toLowerCase().includes(busca.toLowerCase()))
@@ -72,14 +73,14 @@ export function TransferenciaScreen() {
               <View style={s.transferRow}>
                 <View style={s.localBox}>
                   <Text style={s.localLabel}>Origem</Text>
-                  {(['Bar', 'Delivery'] as const).map((l) => (
+                  {TODOS_LOCAIS.map((l) => (
                     <Text key={l} style={[s.localOpt, origem === l && s.localOptActive]} onPress={() => setOrigem(l)}>{l}</Text>
                   ))}
                 </View>
                 <Text style={s.arrow}>→</Text>
                 <View style={s.localBox}>
                   <Text style={s.localLabel}>Destino</Text>
-                  {(['Bar', 'Delivery'] as const).map((l) => (
+                  {TODOS_LOCAIS.map((l) => (
                     <Text key={l} style={[s.localOpt, destino === l && s.localOptActive]} onPress={() => setDestino(l)}>{l}</Text>
                   ))}
                 </View>

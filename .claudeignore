@@ -121,7 +121,18 @@ prisma/migrations/**/*.sql
 !.claude/memory/MEMORY.md
 !CLAUDE.md
 !CONVENTIONS.md
+!ARCHITECTURE.md
 !PROMPT_INICIAL.md
+
+# Framework Enterprise v3.1 — Exceções
+!core/SYSTEM_INTELLIGENCE.md
+!core/BUSINESS_RULES.md
+!memory/MEMORY_CORE.md
+!memory/MEMORY_ACTIVE.md
+!memory/STATE_SNAPSHOT.md
+!memory/DECISIONS_LOG.md
+!memory/ERROR_DNA.md
+!memory/SEMANTIC_INDEX.md
 
 # Builds e caches pesados do Expo
 **/.expo/**/*

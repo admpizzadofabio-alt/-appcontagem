@@ -52,3 +52,24 @@ At ~50-60% context:
 - Request only relevant files
 - Avoid loading entire folders
 - Avoid unrelated context expansion
+
+# ===================================================================
+# 🤖 ROUTER AUTÔNOMO v3.1 — INJEÇÃO DE CONTEXTO AUTOMÁTICA
+# ===================================================================
+# Você DEVE usar suas ferramentas para ler os arquivos abaixo autonomamente.
+# O usuário NÃO precisa usar o `@`.
+
+# 1. SEMPRE QUE INICIAR UM CHAT: Leia `memory/MEMORY_ACTIVE.md`
+# 2. SE FOR BUG: Leia `memory/ERROR_DNA.md` + `memory/STATE_SNAPSHOT.md`
+# 3. SE FOR CRIAR/REFATORAR: Leia `CONVENTIONS.md` + `core/BUSINESS_RULES.md`
+# 4. SE PRECISAR LOCALIZAR MÓDULO: Consulte `memory/SEMANTIC_INDEX.md`
+
+# SELF-CRITIQUE PROTOCOL
+- Você **DEVE** revisar seu plano contra `CONVENTIONS.md` e `core/BUSINESS_RULES.md` antes de responder.
+
+# TOKEN EFFICIENCY RULES (ANTI-REPETITION ENGINE)
+- Nunca repetir explicações já aprovadas.
+- Nunca reexplicar arquitetura conhecida.
+- Responder incrementalmente.
+- Preferir diffs ao invés de blocos completos.
+- Nunca regenerar arquivos inteiros sem necessidade.

@@ -1029,6 +1029,50 @@ Risco aceito para v1. Contexto: app interno de gestão de bar, não app de banco
 
 ---
 
+## VULN-028 — Credenciais do Postgres LOCAL em texto plano no `docker-compose.yml`
+
+| Campo      | Valor |
+|------------|-------|
+| **ID**     | VULN-028 |
+| **Título** | Senhas de dev local hardcoded em arquivo versionado no Git |
+| **Severidade** | **Low** |
+| **OWASP**  | [API8:2023 — Security Misconfiguration](https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/) / CWE-798 (Hard-coded Credentials) |
+| **Status** | Fixed — 2026-05-19 |
+| **Fonte** | Auditoria pós-rollout do local "Vinhos" |
+
+### Descrição
+
+O `docker-compose.yml` da raiz (usado apenas para desenvolvimento local) tinha `POSTGRES_PASSWORD` e `PGADMIN_DEFAULT_PASSWORD` em texto plano. **Não afeta produção**: o Postgres de produção é gerenciado pelo Coolify com senha própria configurada no painel, nunca esteve no Git.
+
+```yaml
+POSTGRES_PASSWORD: e408bcbd60f5ad2d1c4f6cddcb1b490f4c3c9ce8d360fae29c2e47fe8eb10eab
+PGADMIN_DEFAULT_PASSWORD: ec0f69be93d0a7292ce95a7a9ae681b7
+```
+
+### Impacto Real
+
+- **Produção**: zero — Coolify usa Nixpacks + Postgres gerenciado, ignora o `docker-compose.yml` da raiz.
+- **Dev local**: um atacante precisaria estar na mesma rede do desenvolvedor E ter a porta 5432 exposta para fora — risco baixo.
+- **Higiene**: viola princípio de "secrets out of source" (12-factor / OWASP ASVS V2.10).
+
+### Fix Aplicado
+
+1. `docker-compose.yml` agora referencia variáveis via `${POSTGRES_PASSWORD:?...}` com mensagem de erro explícita caso ausentes.
+2. `.env` (root) criado com os valores reais — **gitignored**, jamais commitado.
+3. `.env.example` (root) commitado com placeholders documentando as vars necessárias.
+4. `docker-compose config` continua funcionando localmente porque o compose lê o `.env` automaticamente.
+
+### Decisão
+
+Senha do histórico **mantida** — não vale o custo de reescrever histórico (`git filter-repo` quebraria todos os clones existentes). Repo privado + senha era de dev local + produção não afetada = risco aceito.
+
+### Prevenção
+
+- Pre-commit hook `gitleaks` ou `detect-secrets` para barrar segredos em arquivos versionados.
+- Revisar `git ls-files | xargs grep -E "PASSWORD|SECRET|KEY" -l` periodicamente.
+
+---
+
 ## Checklist de Revisão para Novos Endpoints
 
 Ao criar qualquer rota mutante (`POST`, `PATCH`, `PUT`, `DELETE`) em APIs REST:

@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 const cargaInicialSchema = z.object({
   quantidade: z.coerce.number().positive().max(999999),
-  local: z.enum(['Bar', 'Delivery']),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']),
   observacao: z.string().max(500).optional(),
 })
 
@@ -48,7 +48,7 @@ export async function excluirFisicoHandler(req: Request, res: Response, next: Ne
 export async function resetarCargaInicialHandler(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user || req.user.nivelAcesso !== 'Admin') return res.status(403).json({ error: 'Acesso negado' })
-    const { local } = z.object({ local: z.enum(['Bar', 'Delivery']) }).parse(req.body)
+    const { local } = z.object({ local: z.enum(['Bar', 'Delivery', 'Vinhos']) }).parse(req.body)
     await service.resetarCargaInicial(String(req.params.id), local, req.user.sub, req.user.nome)
     res.json({ ok: true, mensagem: `Carga inicial de ${local} resetada. Produto pode ser reinicializado.` })
   } catch (err) { next(err) }

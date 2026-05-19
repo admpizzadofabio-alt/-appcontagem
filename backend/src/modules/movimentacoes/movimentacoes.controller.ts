@@ -6,7 +6,7 @@ export async function listarHandler(req: Request, res: Response, next: NextFunct
   try {
     const filtros = filtrosMovimentacaoSchema.parse(req.query)
     const isPrivileged = ['Admin', 'Supervisor'].includes(req.user!.nivelAcesso)
-    if (!isPrivileged && (req.user!.setor === 'Bar' || req.user!.setor === 'Delivery')) {
+    if (!isPrivileged && (req.user!.setor === 'Bar' || req.user!.setor === 'Delivery' || req.user!.setor === 'Vinhos')) {
       filtros.local = req.user!.setor
     }
     res.json(await service.listar(filtros))

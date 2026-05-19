@@ -9,7 +9,14 @@
       "Bash(cat)",
       "Read(//tmp/**)",
       "Bash(del \"c:\\\\Users\\\\CLIENTE\\\\Documents\\\\APPCONTAGEM\\\\mobile\\\\src\\\\screens\\\\Contagem\\\\ContagemAtivaScreen.tsx\")",
-      "Bash(del \"c:\\\\Users\\\\CLIENTE\\\\Documents\\\\APPCONTAGEM\\\\mobile\\\\src\\\\screens\\\\Contagem\\\\ContagemScreen.tsx\")"
+      "Bash(del \"c:\\\\Users\\\\CLIENTE\\\\Documents\\\\APPCONTAGEM\\\\mobile\\\\src\\\\screens\\\\Contagem\\\\ContagemScreen.tsx\")",
+      "Bash(rtk git *)",
+      "Bash(grep -v \"//\")",
+      "Bash(ls .env.example)",
+      "Bash(grep -E \"POSTGRES|PGADMIN\" .env.example)",
+      "Bash(ls backend/.env*)",
+      "Bash(grep -l \"DATABASE_URL\" backend/.env*)",
+      "Bash(rtk npm *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\CLIENTE\\.claude\\projects\\c--Users-CLIENTE-Documents-APPCONTAGEM\\memory"

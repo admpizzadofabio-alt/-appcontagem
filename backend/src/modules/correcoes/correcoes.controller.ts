@@ -3,7 +3,7 @@ import { z } from 'zod'
 import * as svc from './correcoes.service.js'
 
 const registrarSchema = z.object({
-  local: z.enum(['Bar', 'Delivery']),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']),
   turnoId: z.string().uuid().optional().nullable(),
   produtoComandadoId: z.string().uuid(),
   produtoServidoId: z.string().uuid(),

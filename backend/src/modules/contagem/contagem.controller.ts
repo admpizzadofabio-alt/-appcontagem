@@ -4,7 +4,7 @@ import { NotFoundError } from '../../shared/errors.js'
 import { iniciarContagemSchema, salvarItemSchema } from './contagem.schemas.js'
 import * as service from './contagem.service.js'
 
-const localQuerySchema = z.enum(['Bar', 'Delivery']).optional()
+const localQuerySchema = z.enum(['Bar', 'Delivery', 'Vinhos']).optional()
 
 export async function listarHandler(req: Request, res: Response, next: NextFunction) {
   try {

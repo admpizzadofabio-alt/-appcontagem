@@ -17,5 +17,5 @@ export const atualizarMapeamentoSchema = z.object({
 export const importarVendasSchema = z.object({
   dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
   dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
-  local: z.enum(['Bar', 'Delivery']).default('Bar'),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']).default('Bar'),
 })

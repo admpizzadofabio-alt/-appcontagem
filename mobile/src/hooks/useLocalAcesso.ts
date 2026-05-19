@@ -1,6 +1,6 @@
 import { useAuth } from '../contexts/AuthContext'
 
-export type Local = 'Bar' | 'Delivery'
+export type Local = 'Bar' | 'Delivery' | 'Vinhos'
 
 export function useLocalAcesso() {
   const { usuario } = useAuth()
@@ -8,8 +8,17 @@ export function useLocalAcesso() {
   const isSupervisor = usuario?.nivelAcesso === 'Supervisor'
   const veTodosLocais = isAdmin || isSupervisor
 
-  const localOperador: Local = usuario?.setor === 'Delivery' ? 'Delivery' : 'Bar'
-  const localOposto: Local = localOperador === 'Bar' ? 'Delivery' : 'Bar'
+  const setor = usuario?.setor
+  const localOperador: Local =
+    setor === 'Delivery' ? 'Delivery'
+    : setor === 'Vinhos' ? 'Vinhos'
+    : 'Bar'
+
+  const TODOS_LOCAIS: Local[] = ['Bar', 'Delivery', 'Vinhos']
+  const outrosLocais: Local[] = TODOS_LOCAIS.filter((l) => l !== localOperador)
+  // Mantido para retro-compat: primeiro local "diferente do operador".
+  // Para operador Vinhos, retorna 'Bar' (mas usar `outrosLocais` é preferível).
+  const localOposto: Local = outrosLocais[0] ?? 'Bar'
 
   return {
     isAdmin,
@@ -17,6 +26,7 @@ export function useLocalAcesso() {
     veTodosLocais,
     localOperador,
     localOposto,
-    locaisPermitidos: (veTodosLocais ? ['Bar', 'Delivery'] : [localOperador]) as Local[],
+    outrosLocais,
+    locaisPermitidos: (veTodosLocais ? TODOS_LOCAIS : [localOperador]) as Local[],
   }
 }

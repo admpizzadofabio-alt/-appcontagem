@@ -18,7 +18,7 @@ import type { AppStackParams } from '../../navigation/types'
 type Route = RouteProp<AppStackParams, 'Movimentacao'>
 
 const MOTIVOS_PERDA = ['Quebra/Queda', 'Vencimento', 'Consumo interno', 'Erro de contagem', 'Outro']
-const LOCAIS = ['Bar', 'Delivery']
+const LOCAIS = ['Bar', 'Delivery', 'Vinhos']
 
 export function MovimentacaoScreen() {
   const { params } = useRoute<Route>()
@@ -49,7 +49,7 @@ export function MovimentacaoScreen() {
 
   const [produtoId, setProdutoId] = useState('')
   const [quantidade, setQuantidade] = useState('')
-  const [local, setLocal] = useState<'Bar' | 'Delivery'>(localOperador)
+  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos'>(localOperador)
   const [motivo, setMotivo] = useState('')
   const [observacao, setObservacao] = useState('')
   const [busca, setBusca] = useState('')
@@ -60,7 +60,7 @@ export function MovimentacaoScreen() {
   const toast = useToast()
 
   const { data: turnoAtual } = useTurnoAtualQuery(
-    { local: local as 'Bar' | 'Delivery' },
+    { local: local as 'Bar' | 'Delivery' | 'Vinhos' },
     { skip: tipo !== 'AjustePerda' },
   )
 
@@ -77,11 +77,11 @@ export function MovimentacaoScreen() {
   const produtoSelecionado = produtos.find((p) => p.id === produtoId)
 
   // setorPadrao define os locais disponíveis para o produto: 'Bar'/'Delivery' restringe, 'Todos' libera ambos
-  const locaisDoProduto: ('Bar' | 'Delivery')[] = produtoSelecionado?.setorPadrao === 'Bar'
+  const locaisDoProduto: ('Bar' | 'Delivery' | 'Vinhos')[] = produtoSelecionado?.setorPadrao === 'Bar'
     ? ['Bar']
     : produtoSelecionado?.setorPadrao === 'Delivery'
       ? ['Delivery']
-      : LOCAIS as ('Bar' | 'Delivery')[]
+      : LOCAIS as ('Bar' | 'Delivery' | 'Vinhos')[]
 
   // Se o produto restringe local e o local atual não casa, ajusta automaticamente
   React.useEffect(() => {

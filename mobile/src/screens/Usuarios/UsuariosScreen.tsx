@@ -9,7 +9,7 @@ import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
 import { colors } from '../../theme/colors'
 
-const SETORES = ['Bar', 'Delivery', 'Admin', 'Todos']
+const SETORES = ['Bar', 'Delivery', 'Vinhos', 'Admin', 'Todos']
 const NIVEIS = ['Operador', 'Supervisor', 'Admin']
 
 export function UsuariosScreen() {

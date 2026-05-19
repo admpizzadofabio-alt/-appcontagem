@@ -24,7 +24,7 @@ Pedidos: undefined
   Usuarios: undefined
   Produtos: undefined
   Colibri: undefined
-  AbrirTurno: { local?: 'Bar' | 'Delivery' } | undefined
+  AbrirTurno: { local?: 'Bar' | 'Delivery' | 'Vinhos' } | undefined
   ContagemTurno: { contagemId: string; colibriPendente?: boolean }
   ResumoContagem: { contagemId: string }
   ErroComanda: { local: string; turnoId?: string | null }

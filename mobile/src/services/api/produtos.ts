@@ -38,11 +38,11 @@ export const produtosApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/produtos/${id}/excluir`, method: 'DELETE' }),
       invalidatesTags: ['Produtos'],
     }),
-    cargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; quantidade: number; local: 'Bar' | 'Delivery'; observacao?: string }>({
+    cargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; quantidade: number; local: 'Bar' | 'Delivery' | 'Vinhos'; observacao?: string }>({
       query: ({ id, ...data }) => ({ url: `/produtos/${id}/carga-inicial`, method: 'POST', data }),
       invalidatesTags: ['Produtos', 'Estoque', 'Movimentacoes'],
     }),
-    resetarCargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; local: 'Bar' | 'Delivery' }>({
+    resetarCargaInicial: build.mutation<{ ok: boolean; mensagem: string }, { id: string; local: 'Bar' | 'Delivery' | 'Vinhos' }>({
       query: ({ id, local }) => ({ url: `/produtos/${id}/carga-inicial`, method: 'DELETE', data: { local } }),
       invalidatesTags: ['Produtos', 'Estoque', 'Movimentacoes'],
     }),

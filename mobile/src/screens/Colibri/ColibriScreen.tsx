@@ -442,7 +442,7 @@ function AbaImportar() {
   const { data: status } = useColibriStatusQuery()
   const [importar, { isLoading }] = useImportarVendasMutation()
   const [data, setData] = useState(ontem())
-  const [local, setLocal] = useState<'Bar' | 'Delivery'>('Bar')
+  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos'>('Bar')
 
   async function handleImportar() {
     if (!status?.ok) {
@@ -500,7 +500,7 @@ function AbaImportar() {
 
         <Text style={[s.fieldLabel, { marginTop: 12 }]}>Descontar do estoque</Text>
         <View style={s.localRow}>
-          {(['Bar', 'Delivery'] as const).map((l) => (
+          {(['Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
             <TouchableOpacity
               key={l}
               style={[s.localBtn, local === l && s.localBtnAtivo]}

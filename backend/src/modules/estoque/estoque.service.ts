@@ -32,7 +32,7 @@ export async function listar(local?: string) {
     })
   }
 
-  const locais = ['Bar', 'Delivery'] as const
+  const locais = ['Bar', 'Delivery', 'Vinhos'] as const
   const produtos = await prisma.produto.findMany({
     where: { ativo: true, marcoInicialEm: { not: null } },
     include: { estoque: true },

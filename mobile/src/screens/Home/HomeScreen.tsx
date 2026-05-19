@@ -13,10 +13,13 @@ import { SectionHeader } from '../../components/SectionHeader'
 import { BotaoColibriCarregar } from '../../components/BotaoColibriCarregar'
 import { useColibriNovosQuery } from '../../services/api/colibri'
 import { useListarProdutosQuery } from '../../services/api/produtos'
+import { useLocalAcesso, type Local } from '../../hooks/useLocalAcesso'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
 type Nav = NativeStackNavigationProp<AppStackParams>
+
+const TODOS_LOCAIS: Local[] = ['Bar', 'Delivery', 'Vinhos']
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>()
@@ -26,11 +29,12 @@ export function HomeScreen() {
 
   const isAdmin = usuario?.nivelAcesso === 'Admin'
   const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
-  const localOperador = (usuario?.setor === 'Delivery' ? 'Delivery' : 'Bar') as 'Bar' | 'Delivery'
+  const { localOperador } = useLocalAcesso()
   // Polling: 15s para sincronizar turno aberto/fechado por outro dispositivo (admin/outro op)
   const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador }, { pollingInterval: 15000 })
-  const { data: turnoDelivery } = useTurnoAtualQuery({ local: 'Delivery' }, { skip: !isAdmin, pollingInterval: 15000 })
   const { data: turnoBar } = useTurnoAtualQuery({ local: 'Bar' }, { skip: !isAdmin, pollingInterval: 15000 })
+  const { data: turnoDelivery } = useTurnoAtualQuery({ local: 'Delivery' }, { skip: !isAdmin, pollingInterval: 15000 })
+  const { data: turnoVinhos } = useTurnoAtualQuery({ local: 'Vinhos' }, { skip: !isAdmin, pollingInterval: 15000 })
   const { data: colibriNovos } = useColibriNovosQuery(undefined, {
     skip: !isSup,
     pollingInterval: 60 * 60 * 1000, // re-verifica a cada 1h
@@ -49,19 +53,28 @@ export function HomeScreen() {
   const turnoAberto = !!turnoAtual
   const contagemFinalizada = turnoAtual?.contagem?.status === 'Fechada'
   const operacoesLiberadas = isAdmin || (turnoAberto && contagemFinalizada)
-  const turnosAdmin = isAdmin ? [turnoBar, turnoDelivery].filter(Boolean) : []
+  const turnosAdmin = isAdmin ? [turnoBar, turnoDelivery, turnoVinhos].filter(Boolean) : []
   const algumTurnoAberto = isAdmin ? turnosAdmin.length > 0 : turnoAberto
 
-  const localOutro = (localOperador === 'Bar' ? 'Delivery' : 'Bar') as 'Bar' | 'Delivery'
-  const turnoOutro = localOperador === 'Bar' ? turnoDelivery : turnoBar
+  // Para Admin: lista os 2 outros locais (não-operador) para exibir pendências cruzadas.
+  // Para operador: array vazio (não usado).
+  const outrosLocais: Local[] = isAdmin ? TODOS_LOCAIS.filter((l) => l !== localOperador) : []
   const { data: transfPendentes = [] } = useListarTransferenciasPendentesQuery(
     { local: localOperador },
     { skip: !operacoesLiberadas },
   )
-  const { data: transfPendentesOutro = [] } = useListarTransferenciasPendentesQuery(
-    { local: localOutro },
-    { skip: !isAdmin },
+  const { data: transfPendentesOutro1 = [] } = useListarTransferenciasPendentesQuery(
+    { local: (outrosLocais[0] ?? 'Bar') as Local },
+    { skip: !isAdmin || !outrosLocais[0] },
   )
+  const { data: transfPendentesOutro2 = [] } = useListarTransferenciasPendentesQuery(
+    { local: (outrosLocais[1] ?? 'Bar') as Local },
+    { skip: !isAdmin || !outrosLocais[1] },
+  )
+  const transfOutrosCards = [
+    { local: outrosLocais[0], lista: transfPendentesOutro1 },
+    { local: outrosLocais[1], lista: transfPendentesOutro2 },
+  ].filter((c): c is { local: Local; lista: typeof transfPendentesOutro1 } => !!c.local && c.lista.length > 0)
 
   function bloqueadoAlert() {
     if (!turnoAberto) {
@@ -122,7 +135,7 @@ export function HomeScreen() {
         {!algumTurnoAberto && (
           <TouchableOpacity
             style={s.openCaixaBtn}
-            onPress={() => nav.navigate('AbrirTurno', usuario?.setor === 'Delivery' ? { local: 'Delivery' } : { local: 'Bar' })}
+            onPress={() => nav.navigate('AbrirTurno', { local: localOperador })}
             activeOpacity={0.85}
           >
             <Text style={s.openCaixaIcon}>🔓</Text>
@@ -141,7 +154,7 @@ export function HomeScreen() {
             <TouchableOpacity
               key={t!.id}
               style={[s.turnoStatusCard, tContagemOk ? s.turnoStatusOk : s.turnoStatusBloqueado]}
-              onPress={() => nav.navigate('AbrirTurno', { local: t!.local as 'Bar' | 'Delivery' })}
+              onPress={() => nav.navigate('AbrirTurno', { local: t!.local as Local })}
               activeOpacity={0.85}
             >
               <Text style={s.turnoStatusIcon}>{tContagemOk ? '🟢' : '🟡'}</Text>
@@ -212,22 +225,23 @@ export function HomeScreen() {
             <Text style={s.transfPendenteArrow}>›</Text>
           </TouchableOpacity>
         )}
-        {isAdmin && transfPendentesOutro.length > 0 && (
+        {transfOutrosCards.map((c) => (
           <TouchableOpacity
+            key={c.local}
             style={s.transfPendenteCard}
-            onPress={() => nav.navigate('AbrirTurno', { local: localOutro })}
+            onPress={() => nav.navigate('AbrirTurno', { local: c.local })}
             activeOpacity={0.85}
           >
             <Text style={s.transfPendenteIcon}>📦</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.transfPendenteTitle}>
-                {transfPendentesOutro.length} transferência{transfPendentesOutro.length !== 1 ? 's' : ''} aguardando confirmação
+                {c.lista.length} transferência{c.lista.length !== 1 ? 's' : ''} aguardando confirmação
               </Text>
-              <Text style={s.transfPendenteSub}>{localOutro} · Toque para confirmar recebimento</Text>
+              <Text style={s.transfPendenteSub}>{c.local} · Toque para confirmar recebimento</Text>
             </View>
             <Text style={s.transfPendenteArrow}>›</Text>
           </TouchableOpacity>
-        )}
+        ))}
 
         {/* Aviso: produtos sem carga inicial */}
         {isSup && semCargaCount > 0 && (

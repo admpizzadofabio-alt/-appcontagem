@@ -3,7 +3,7 @@ import { baseApi } from '../../store/api/baseApi'
 export type Turno = {
   id: string
   diaOperacional: string
-  local: 'Bar' | 'Delivery'
+  local: 'Bar' | 'Delivery' | 'Vinhos'
   abertoEm: string
   fechadoEm?: string | null
   status: 'Aberto' | 'Fechado'
@@ -143,11 +143,11 @@ export type RascunhoEntrada = {
 
 export const turnosApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
-    turnoAtual: build.query<Turno | null, { local: 'Bar' | 'Delivery' }>({
+    turnoAtual: build.query<Turno | null, { local: 'Bar' | 'Delivery' | 'Vinhos' }>({
       query: (params) => ({ url: '/turnos/atual', params }),
       providesTags: ['Turno'],
     }),
-    abrirTurno: build.mutation<Turno, { local: 'Bar' | 'Delivery' }>({
+    abrirTurno: build.mutation<Turno, { local: 'Bar' | 'Delivery' | 'Vinhos' }>({
       query: (data) => ({ url: '/turnos/abrir', method: 'POST', data }),
       invalidatesTags: ['Turno'],
     }),

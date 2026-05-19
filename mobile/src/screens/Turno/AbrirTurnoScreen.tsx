@@ -21,8 +21,10 @@ export function AbrirTurnoScreen() {
   const { usuario } = useAuth()
   const { veTodosLocais } = useLocalAcesso()
 
-  const localInicial: 'Bar' | 'Delivery' = route.params?.local ?? (usuario?.setor === 'Delivery' ? 'Delivery' : 'Bar')
-  const [local, setLocal] = useState<'Bar' | 'Delivery'>(localInicial)
+  const setorUsuario = usuario?.setor
+  const localInicial: 'Bar' | 'Delivery' | 'Vinhos' = route.params?.local
+    ?? (setorUsuario === 'Delivery' ? 'Delivery' : setorUsuario === 'Vinhos' ? 'Vinhos' : 'Bar')
+  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos'>(localInicial)
 
   const { data: turnoAtual, isLoading, refetch } = useTurnoAtualQuery({ local })
   const [abrir, { isLoading: abrindo }] = useAbrirTurnoMutation()
@@ -155,7 +157,7 @@ export function AbrirTurnoScreen() {
 
         {veTodosLocais ? (
           <View style={s.localRow}>
-            {(['Bar', 'Delivery'] as const).map((l) => (
+            {(['Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
               <TouchableOpacity
                 key={l}
                 style={[s.localBtn, local === l && s.localBtnAtivo]}

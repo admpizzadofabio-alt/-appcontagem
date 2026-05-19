@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const iniciarContagemSchema = z.object({
-  local: z.enum(['Bar', 'Delivery']),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']),
   modoCego: z.boolean().default(true),
   threshold: z.coerce.number().int().min(0).default(2),
 })

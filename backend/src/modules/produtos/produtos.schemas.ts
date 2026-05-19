@@ -8,7 +8,7 @@ export const criarProdutoSchema = z.object({
   custoUnitario: z.coerce.number().min(0).max(999999).default(0),
   estoqueMinimo: z.coerce.number().min(0).max(999999).default(0),
   perdaThreshold: z.coerce.number().min(0).max(999999).default(5),
-  setorPadrao: z.enum(['Bar', 'Delivery', 'Todos']).default('Todos'),
+  setorPadrao: z.enum(['Bar', 'Delivery', 'Vinhos', 'Todos']).default('Todos'),
   // Validação granular de formato/tamanho de imagem fica em validarImagem.ts (chamado pelo service).
   // Aqui o limite de 1.5MB cobre a string base64 inflated (imagem real até ~1.1MB).
   imagem: z.string().max(1_500_000).optional(),

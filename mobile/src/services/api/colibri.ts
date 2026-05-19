@@ -26,7 +26,7 @@ export type ColibriImportacao = {
 export type ImportarVendasInput = {
   dataInicio: string
   dataFim: string
-  local: 'Bar' | 'Delivery'
+  local: 'Bar' | 'Delivery' | 'Vinhos'
 }
 
 export type ImportarVendasResult = {

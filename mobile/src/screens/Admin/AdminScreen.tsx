@@ -522,7 +522,7 @@ type GrupoProduto = {
 }
 
 function AbaMovimentosContent() {
-  const [localFiltro, setLocalFiltro] = useState<'Bar' | 'Delivery' | undefined>(undefined)
+  const [localFiltro, setLocalFiltro] = useState<'Bar' | 'Delivery' | 'Vinhos' | undefined>(undefined)
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>('todos')
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('todos')
   const [vista, setVista] = useState<VistaFiltro>('produto')
@@ -793,7 +793,7 @@ function AbaMovimentosContent() {
         {/* Local + Vista */}
         <View style={s.movControles}>
           <View style={[s.localRow, { flex: 1 }]}>
-            {([undefined, 'Bar', 'Delivery'] as const).map((l) => (
+            {([undefined, 'Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
               <TouchableOpacity key={l ?? 'todos'} style={[s.localBtn, localFiltro === l && s.localBtnAtivo]} onPress={() => setLocalFiltro(l)}>
                 <Text style={[s.localBtnTxt, localFiltro === l && s.localBtnTxtAtivo]}>{l ?? 'Todos'}</Text>
               </TouchableOpacity>

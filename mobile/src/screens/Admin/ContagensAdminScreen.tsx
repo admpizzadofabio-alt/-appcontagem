@@ -2,9 +2,10 @@ import React, { useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useListarContagensAdminQuery, useExcluirContagemMutation, type ContagemAdminItem } from '../../services/api/turnos'
+import { CalendarPicker } from '../../components/CalendarPicker'
 import { colors } from '../../theme/colors'
 
-type Local = 'Bar' | 'Delivery' | ''
+type Local = 'Bar' | 'Delivery' | 'Vinhos' | ''
 
 function fmtData(iso: string) {
   const d = new Date(iso)
@@ -53,29 +54,15 @@ export function ContagensAdminScreen() {
           </Text>
         </View>
 
-        <Text style={s.label}>Data início (YYYY-MM-DD)</Text>
-        <TextInput
-          style={s.input}
-          value={dataInicio}
-          onChangeText={setDataInicio}
-          placeholder="2026-05-01"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-        />
+        <Text style={s.label}>Data início</Text>
+        <CalendarPicker value={dataInicio} onChange={setDataInicio} placeholder="Todas as datas" />
 
-        <Text style={s.label}>Data fim (YYYY-MM-DD)</Text>
-        <TextInput
-          style={s.input}
-          value={dataFim}
-          onChangeText={setDataFim}
-          placeholder="2026-05-17"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-        />
+        <Text style={s.label}>Data fim</Text>
+        <CalendarPicker value={dataFim} onChange={setDataFim} placeholder="Todas as datas" />
 
         <Text style={s.label}>Local</Text>
         <View style={s.chipRow}>
-          {(['', 'Bar', 'Delivery'] as Local[]).map((l) => (
+          {(['', 'Bar', 'Delivery', 'Vinhos'] as Local[]).map((l) => (
             <TouchableOpacity
               key={l || 'todos'}
               style={[s.chip, local === l && s.chipActive]}

@@ -1,11 +1,11 @@
 import { z } from 'zod'
 
 export const abrirTurnoSchema = z.object({
-  local: z.enum(['Bar', 'Delivery']),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']),
 })
 
 export const localQuerySchema = z.object({
-  local: z.enum(['Bar', 'Delivery']),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']),
 })
 
 export const registrarItemContagemSchema = z.object({

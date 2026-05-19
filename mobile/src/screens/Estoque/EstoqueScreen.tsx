@@ -76,7 +76,7 @@ export function EstoqueScreen() {
   const contagemFinalizada = turnoAtual?.contagem?.status === 'Fechada'
   const qtdBloqueada = !isSup && !contagemFinalizada
 
-  const [local, setLocal] = useState<'Bar' | 'Delivery' | undefined>(veTodosLocais ? undefined : localOperador)
+  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos' | undefined>(veTodosLocais ? undefined : localOperador)
   const [busca, setBusca] = useState('')
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
   const dias = useMemo(() => gerarUltimos7Dias(), [])
@@ -121,7 +121,7 @@ export function EstoqueScreen() {
 
         {veTodosLocais ? (
           <View style={s.tabs}>
-            {([undefined, 'Bar', 'Delivery'] as const).map((l) => (
+            {([undefined, 'Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
               <TouchableOpacity key={String(l)} style={[s.tab, local === l && s.tabActive]} onPress={() => setLocal(l)}>
                 <Text style={[s.tabText, local === l && s.tabTextActive]}>{l ?? 'Todos'}</Text>
               </TouchableOpacity>

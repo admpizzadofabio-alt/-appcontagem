@@ -18,6 +18,7 @@ build/
 deploy/.env.production
 !.env.example
 !.env.local.example
+*.dev-backup
 
 # ── Banco de dados ──────────────────────────────────────
 *.db
@@ -53,7 +54,14 @@ docker/data/
 
 # ── Backups locais (contém dados sensíveis) ────────────
 backend/backups/
+backups/
 *.backup.json
+
+# ── Contexto local da IA (nunca versionar) ─────────────
+core/
+memory/
+sessions/
+workflows/
 
 # ── Scripts de debug/investigação (ad-hoc, não versionar) ─
 backend/scripts/check-*.ts

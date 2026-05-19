@@ -81,7 +81,7 @@ export function ErroComandaScreen() {
 
     try {
       await registrar({
-        local: local as 'Bar' | 'Delivery',
+        local: local as 'Bar' | 'Delivery' | 'Vinhos',
         turnoId: turnoId ?? null,
         produtoComandadoId,
         produtoServidoId,

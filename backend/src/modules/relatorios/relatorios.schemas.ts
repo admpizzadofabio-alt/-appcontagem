@@ -9,7 +9,7 @@ export const auditoriaQuerySchema = z.object({
   ate: z.string().datetime({ offset: true }).optional(),
   usuarioId: z.string().uuid().optional(),
   tipo: z.enum(['Entrada', 'Saida', 'Transferencia', 'AjustePerda', 'AjusteContagem', 'CargaInicial']).optional(),
-  local: z.enum(['Bar', 'Delivery']).optional(),
+  local: z.enum(['Bar', 'Delivery', 'Vinhos']).optional(),
 })
 
 export type DivergenciasQuery = z.infer<typeof divergenciasQuerySchema>

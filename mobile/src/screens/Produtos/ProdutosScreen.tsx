@@ -33,10 +33,10 @@ import { colors } from '../../theme/colors'
 
 const CATEGORIAS = ['Cerveja', 'Refrigerante', 'Água', 'Suco', 'Vinho', 'Destilado', 'Outros']
 const UNIDADES   = ['un', 'L', 'ml', 'cx', 'fardo']
-const SETORES    = ['Bar', 'Delivery', 'Todos'] as const
-const SETOR_LABEL: Record<string, string> = { Bar: '🍺 Bar', Delivery: '🛵 Delivery', Todos: '🔄 Bar + Delivery' }
+const SETORES    = ['Bar', 'Delivery', 'Vinhos', 'Todos'] as const
+const SETOR_LABEL: Record<string, string> = { Bar: '🍺 Bar', Delivery: '🛵 Delivery', Vinhos: '🍷 Vinhos', Todos: '🔄 Todos os locais' }
 
-type Setor = 'Bar' | 'Delivery' | 'Todos'
+type Setor = 'Bar' | 'Delivery' | 'Vinhos' | 'Todos'
 
 export function ProdutosScreen() {
   const { data: produtos = [], isLoading } = useListarProdutosQuery()

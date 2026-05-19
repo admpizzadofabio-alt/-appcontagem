@@ -17,7 +17,7 @@ export type CorrecaoVenda = {
 export const correcoesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     registrarCorrecao: build.mutation<CorrecaoVenda, {
-      local: 'Bar' | 'Delivery'
+      local: 'Bar' | 'Delivery' | 'Vinhos'
       turnoId?: string | null
       produtoComandadoId: string
       produtoServidoId: string
