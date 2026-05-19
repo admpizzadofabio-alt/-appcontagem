@@ -282,7 +282,7 @@ export function EstoqueScreen() {
                   </TouchableOpacity>
                   {aberto && (
                     <View style={s.expandido}>
-                      {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, isHoje ? undefined : dataSelecionada)}
+                      {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
                     </View>
                   )}
                 </Card>
@@ -315,7 +315,7 @@ export function EstoqueScreen() {
                   </TouchableOpacity>
                   {aberto && (
                     <View style={s.expandido}>
-                      {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, isHoje ? undefined : dataSelecionada)}
+                      {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
                     </View>
                   )}
                 </Card>
