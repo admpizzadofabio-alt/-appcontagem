@@ -352,6 +352,7 @@ export async function importarVendas(params: {
       totalVendas: vendas.length,
       totalImportados: importados,
       totalIgnorados: ignorados + semMarco + antesDoMarco + dedupSkip,
+      detalhesIgnorados: { semVinculo: ignorados, semMarco, antesDoMarco, dedup: dedupSkip },
       erros,
       status: erros.length > 0 ? 'parcial' : 'ok',
       dataInicio: params.dataInicio,
