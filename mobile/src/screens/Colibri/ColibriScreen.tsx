@@ -25,18 +25,16 @@ import { Card } from '../../components/Card'
 import { ActionButton } from '../../components/ActionButton'
 import { EmptyState } from '../../components/EmptyState'
 import { colors } from '../../theme/colors'
+import { formatLocalDate, localOntem } from '../../utils/dateLocal'
 
 type Aba = 'importar' | 'catalogo' | 'mapeamentos' | 'historico' | 'produtos'
 
-
 function hoje() {
-  return new Date().toISOString().slice(0, 10)
+  return formatLocalDate()
 }
 
 function ontem() {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString().slice(0, 10)
+  return localOntem()
 }
 
 export function ColibriScreen() {

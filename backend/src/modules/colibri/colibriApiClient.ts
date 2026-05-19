@@ -1,4 +1,5 @@
 import { env } from '../../config/env.js'
+import { formatLocalDate } from '../../shared/dateLocal.js'
 
 type ColibriSaleItem = {
   idItemVenda: number | string // ID único da venda no Colibri — usado para dedup
@@ -201,9 +202,9 @@ export async function fetchVendas(dataInicio: string, dataFim: string): Promise<
 
 export async function fetchCatalogo(): Promise<ColibriProdutoCatalogo[]> {
   const hoje = new Date()
-  const dtfim = hoje.toISOString().split('T')[0]
+  const dtfim = formatLocalDate(hoje)
   const dt30 = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000)
-  const dtinicio = dt30.toISOString().split('T')[0]
+  const dtinicio = formatLocalDate(dt30)
 
   const items = await fetchAllItems(dtinicio, dtfim)
 

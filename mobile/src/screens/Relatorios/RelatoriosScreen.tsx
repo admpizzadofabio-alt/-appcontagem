@@ -8,6 +8,7 @@ import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
 import { SectionHeader } from '../../components/SectionHeader'
 import { colors } from '../../theme/colors'
+import { formatLocalDate } from '../../utils/dateLocal'
 
 type Periodo = 'hoje' | 'semana' | 'mes' | 'anterior'
 
@@ -19,7 +20,7 @@ const PERIODOS: { key: Periodo; label: string }[] = [
 ]
 
 function calcDatas(p: Periodo): { dataInicio: string; dataFim: string } {
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  const fmt = (d: Date) => formatLocalDate(d)
   const hoje = new Date()
 
   if (p === 'hoje') {

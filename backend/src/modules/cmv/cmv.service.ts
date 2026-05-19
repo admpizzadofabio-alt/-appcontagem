@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js'
+import { formatLocalDate } from '../../shared/dateLocal.js'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -74,8 +75,8 @@ export async function getCmvBebidas(dataInicio: Date, dataFim: Date) {
 
   return {
     periodo: {
-      inicio: dataInicio.toISOString().slice(0, 10),
-      fim:    dataFim.toISOString().slice(0, 10),
+      inicio: formatLocalDate(dataInicio),
+      fim:    formatLocalDate(dataFim),
     },
     totais: {
       eiValor:       round2(porCategoria.reduce((s, c) => s + c.eiValor, 0)),
