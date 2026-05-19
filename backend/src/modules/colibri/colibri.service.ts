@@ -396,13 +396,15 @@ export async function importarPendente(params: {
   }
 
   // Determina próximo dia a importar a partir do último dataFim registrado
-  // formatLocalDate converte corretamente para BRT independente de como foi armazenado
   const ultimaStr = formatLocalDate(ultima.dataFim)
-  const proximoDia = ultimaStr >= hojeStr ? hojeStr : localNextDay(ultimaStr)
+  const proximoPendente = ultimaStr >= hojeStr ? hojeStr : localNextDay(ultimaStr)
 
-  // Coleta todos os dias pendentes até hoje
+  // Sempre inclui ontem para capturar vendas tardias da noite (Colibri pode sincronizar tarde)
+  // Se há dias pendentes mais antigos, começa por eles; caso contrário, começa em ontem
+  const inicioEfetivo = proximoPendente <= ontemStr ? proximoPendente : ontemStr
+
   const dias: string[] = []
-  let d = proximoDia
+  let d = inicioEfetivo
   while (d <= hojeStr) {
     dias.push(d)
     d = localNextDay(d)
