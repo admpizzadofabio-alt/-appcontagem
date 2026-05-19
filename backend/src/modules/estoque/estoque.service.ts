@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { NotFoundError, ForbiddenError } from '../../shared/errors.js'
+import { parseLocalDate } from '../../shared/dateLocal.js'
 
 export async function listar(local?: string) {
   // Filtro Marco Inicial: só exibe produtos que já tiveram carga inicial.
@@ -77,8 +78,9 @@ export async function ajustar(id: string, quantidade: number, usuarioId: string,
 }
 
 export async function historico(data: string, local: string) {
-  const inicioDia = new Date(data + 'T00:00:00')
-  const fimDia = new Date(data + 'T23:59:59')
+  // Usa BRT (UTC-3) para os limites do dia — alinha com dataMov que também é BRT
+  const inicioDia = parseLocalDate(data, '00:00:00')
+  const fimDia = parseLocalDate(data, '23:59:59')
   const turno = await prisma.fechamentoTurno.findFirst({
     where: { local, abertoEm: { gte: inicioDia, lte: fimDia } },
     orderBy: { abertoEm: 'asc' },
