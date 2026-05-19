@@ -52,8 +52,8 @@ export function BotaoColibriCarregar({ compact = false }: Props) {
           `✓ ${r.totalImportados} produto(s) atualizado(s)` +
           (listaProds ? `:\n${listaProds}\n` : '\n') +
           `\n📦 ${r.totalVendas} venda(s) processada(s)\n` +
-          (r.detalhesIgnorados?.semVinculo > 0 ? `⚠️ ${r.detalhesIgnorados.semVinculo} não controlado(s) (sem vínculo)\n` : '') +
-          (r.detalhesIgnorados?.dedup > 0 ? `🔁 ${r.detalhesIgnorados.dedup} já importada(s) (dedup)\n` : '') +
+          ((r.detalhesIgnorados?.semVinculo ?? 0) > 0 ? `⚠️ ${r.detalhesIgnorados!.semVinculo} não controlado(s) (sem vínculo)\n` : '') +
+          ((r.detalhesIgnorados?.dedup ?? 0) > 0 ? `🔁 ${r.detalhesIgnorados!.dedup} já importada(s) (dedup)\n` : '') +
           (r.erros.length > 0 ? `\n❌ ${r.erros.length} erro(s)` : ''),
       )
     } catch (e: any) {

@@ -464,8 +464,8 @@ function AbaImportar() {
               const msg = [
                 `Vendas processadas: ${res.totalVendas}`,
                 `Produtos baixados: ${res.totalImportados}`,
-                res.detalhesIgnorados?.semVinculo > 0 ? `Não controlados (sem vínculo): ${res.detalhesIgnorados.semVinculo}` : '',
-                res.detalhesIgnorados?.dedup > 0 ? `Já importadas (dedup): ${res.detalhesIgnorados.dedup}` : '',
+                (res.detalhesIgnorados?.semVinculo ?? 0) > 0 ? `Não controlados (sem vínculo): ${res.detalhesIgnorados!.semVinculo}` : '',
+                (res.detalhesIgnorados?.dedup ?? 0) > 0 ? `Já importadas (dedup): ${res.detalhesIgnorados!.dedup}` : '',
                 res.erros.length > 0 ? `\nErros: ${res.erros.join(', ')}` : '',
               ].filter(Boolean).join('\n')
               Alert.alert('Importação concluída', msg)

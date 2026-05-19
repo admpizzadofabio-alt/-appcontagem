@@ -85,7 +85,7 @@ export function EstoqueScreen() {
   const localHistorico = local ?? 'Bar'
   const { data: historico, isLoading: loadingHistorico } = useHistoricoEstoqueQuery(
     { data: dataSelecionada, local: localHistorico },
-    { skip: isHoje || !isSup }
+    { skip: !isSup }
   )
 
   function toggleExpand(id: string) {
@@ -238,6 +238,23 @@ export function EstoqueScreen() {
 
         {/* ── View de hoje ────────────────────────────────────── */}
         {isHoje && <>
+        {/* Card resumo do dia (mesmo visual dos dias anteriores) */}
+        {isSup && historico?.temDados && historico.resumo && (
+          <Card style={s.resumoDia}>
+            <Text style={s.resumoDiaTitulo}>📅 {new Date(historico.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} · {localHistorico}</Text>
+            <View style={s.resumoDiaRow}>
+              <View style={s.resumoDiaItem}><Text style={s.resumoDiaVal}>{historico.resumo.totalColibri}</Text><Text style={s.resumoDiaLabel}>Vendas</Text></View>
+              <View style={s.resumoDiaItem}><Text style={s.resumoDiaVal}>{historico.resumo.totalEntradas}</Text><Text style={s.resumoDiaLabel}>Entradas</Text></View>
+              <View style={s.resumoDiaItem}><Text style={s.resumoDiaVal}>{historico.resumo.totalPerdas}</Text><Text style={s.resumoDiaLabel}>Perdas</Text></View>
+              <View style={s.resumoDiaItem}>
+                <Text style={[s.resumoDiaVal, historico.resumo.totalDivergencias > 0 && { color: colors.danger }]}>
+                  {historico.resumo.totalDivergencias}
+                </Text>
+                <Text style={s.resumoDiaLabel}>Diverg.</Text>
+              </View>
+            </View>
+          </Card>
+        )}
         {isLoading && <SkeletonList count={4} />}
         {!isLoading && filtrados.length === 0 && <EmptyState icon="📭" title="Nenhum produto encontrado" />}
 
