@@ -264,6 +264,7 @@ export function EstoqueScreen() {
             <SectionHeader title={`⚠️ Abaixo do mínimo (${baixo.length})`} />
             {baixo.map((e) => {
               const aberto = expandidos.has(e.id)
+              const hist = historico?.produtos.find((p) => p.produtoId === e.produtoId)
               return (
                 <Card key={e.id} style={s.itemCard}>
                   <TouchableOpacity onPress={() => toggleExpand(e.id)} activeOpacity={0.8}>
@@ -282,6 +283,15 @@ export function EstoqueScreen() {
                   </TouchableOpacity>
                   {aberto && (
                     <View style={s.expandido}>
+                      {hist && (
+                        <View style={s.fluxoRow}>
+                          <View style={s.fluxoItem}><Text style={s.fluxoVal}>{hist.abertura}</Text><Text style={s.fluxoLabel}>Abertura</Text></View>
+                          {hist.colibri > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.danger }]}>-{hist.colibri}</Text><Text style={s.fluxoLabel}>Vendas</Text></View>}
+                          {hist.entradas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.success }]}>+{hist.entradas}</Text><Text style={s.fluxoLabel}>Entradas</Text></View>}
+                          {hist.perdas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.warning }]}>-{hist.perdas}</Text><Text style={s.fluxoLabel}>Perdas</Text></View>}
+                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Fechamento</Text></View>
+                        </View>
+                      )}
                       {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
                     </View>
                   )}
@@ -297,6 +307,7 @@ export function EstoqueScreen() {
             <SectionHeader title={`Em estoque (${ok.length})`} />
             {ok.map((e) => {
               const aberto = expandidos.has(e.id)
+              const hist = historico?.produtos.find((p) => p.produtoId === e.produtoId)
               return (
                 <Card key={e.id} style={s.itemCard}>
                   <TouchableOpacity onPress={() => toggleExpand(e.id)} activeOpacity={0.8}>
@@ -315,6 +326,15 @@ export function EstoqueScreen() {
                   </TouchableOpacity>
                   {aberto && (
                     <View style={s.expandido}>
+                      {hist && (
+                        <View style={s.fluxoRow}>
+                          <View style={s.fluxoItem}><Text style={s.fluxoVal}>{hist.abertura}</Text><Text style={s.fluxoLabel}>Abertura</Text></View>
+                          {hist.colibri > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.danger }]}>-{hist.colibri}</Text><Text style={s.fluxoLabel}>Vendas</Text></View>}
+                          {hist.entradas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.success }]}>+{hist.entradas}</Text><Text style={s.fluxoLabel}>Entradas</Text></View>}
+                          {hist.perdas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.warning }]}>-{hist.perdas}</Text><Text style={s.fluxoLabel}>Perdas</Text></View>}
+                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Fechamento</Text></View>
+                        </View>
+                      )}
                       {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
                     </View>
                   )}
