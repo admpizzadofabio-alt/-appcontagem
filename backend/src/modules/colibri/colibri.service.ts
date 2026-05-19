@@ -16,6 +16,7 @@ export type ImportarVendasResult = {
   totalVendas: number
   totalImportados: number
   totalIgnorados: number
+  detalhesIgnorados?: { semVinculo: number; semMarco: number; antesDoMarco: number; dedup: number }
   erros: string[]
   aviso?: string
   status: 'ok' | 'parcial' | 'aguardando' | 'em_andamento' | 'sem_periodo'
