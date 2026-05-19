@@ -443,8 +443,7 @@ function AbaCatalogo() {
 function AbaImportar() {
   const { data: status } = useColibriStatusQuery()
   const [importar, { isLoading }] = useImportarVendasMutation()
-  const [dataInicio, setDataInicio] = useState(ontem())
-  const [dataFim, setDataFim] = useState(hoje())
+  const [data, setData] = useState(ontem())
   const [local, setLocal] = useState<'Bar' | 'Delivery'>('Bar')
 
   async function handleImportar() {
@@ -454,14 +453,14 @@ function AbaImportar() {
     }
     Alert.alert(
       'Confirmar importação',
-      `Importar vendas de ${dataInicio} a ${dataFim} e descontar do estoque ${local}?`,
+      `Importar vendas de ${data} e descontar do estoque ${local}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Importar',
           onPress: async () => {
             try {
-              const res = await importar({ dataInicio, dataFim, local }).unwrap()
+              const res = await importar({ dataInicio: data, dataFim: data, local }).unwrap()
               const msg = [
                 `Vendas processadas: ${res.totalVendas}`,
                 `Produtos baixados: ${res.totalImportados}`,
@@ -488,23 +487,14 @@ function AbaImportar() {
         </View>
       </Card>
 
-      <SectionHeader title="Período das vendas" />
+      <SectionHeader title="Data das vendas" />
 
       <Card>
-        <Text style={s.fieldLabel}>Data início</Text>
+        <Text style={s.fieldLabel}>Data (YYYY-MM-DD)</Text>
         <TextInput
           style={s.input}
-          value={dataInicio}
-          onChangeText={setDataInicio}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="numeric"
-        />
-        <Text style={[s.fieldLabel, { marginTop: 12 }]}>Data fim</Text>
-        <TextInput
-          style={s.input}
-          value={dataFim}
-          onChangeText={setDataFim}
+          value={data}
+          onChangeText={setData}
           placeholder="YYYY-MM-DD"
           placeholderTextColor={colors.textMuted}
           keyboardType="numeric"
