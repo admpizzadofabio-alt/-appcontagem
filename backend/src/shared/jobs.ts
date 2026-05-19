@@ -3,7 +3,7 @@ import { logger } from '../config/logger.js'
 import { env } from '../config/env.js'
 import { fecharTurnosAbertosCron } from '../modules/turnos/turnos.service.js'
 import { importarPendente, sincronizarCatalogo, recuperarColibriStartup } from '../modules/colibri/colibri.service.js'
-import { formatLocalDate } from './dateLocal.js'
+import { formatLocalDate, localOntem, parseLocalDate } from './dateLocal.js'
 import { criarBackup, rotacionarBackups } from './backup.js'
 import { enviarAlerta } from './alertWebhook.js'
 import { limparFotosAntigas } from './retencaoFotos.js'
@@ -138,7 +138,7 @@ async function checarBackupDiario() {
   }
 }
 
-// Monitor Colibri: alerta via webhook se sem importar há >2h (durante horário ativo)
+// Monitor Colibri: alerta via webhook (durante horário ativo)
 let ultimoAlertaColibri = 0
 const ALERTA_COLIBRI_THROTTLE_MS = 4 * 60 * 60 * 1000 // re-alerta no máx a cada 4h
 async function checarSaudeColibri() {
@@ -147,24 +147,52 @@ async function checarSaudeColibri() {
   const hora = agora.getHours()
   // Só alerta entre 06h e 23h (não acordar admin de madrugada)
   if (hora < 6 || hora > 23) return
+  if (Date.now() - ultimoAlertaColibri < ALERTA_COLIBRI_THROTTLE_MS) return
 
+  // Check 1: sem importação há >2h (cron parou de rodar / backend offline)
   const ultima = await prisma.colibriImportacao.findFirst({
     where: { status: { in: ['ok', 'parcial'] } },
     orderBy: { importadoEm: 'desc' },
     select: { importadoEm: true },
   })
-  if (!ultima) return
 
-  const horasDesde = (Date.now() - ultima.importadoEm.getTime()) / (1000 * 60 * 60)
-  if (horasDesde < 2) return
-  if (Date.now() - ultimoAlertaColibri < ALERTA_COLIBRI_THROTTLE_MS) return
+  if (ultima) {
+    const horasDesde = (Date.now() - ultima.importadoEm.getTime()) / (1000 * 60 * 60)
+    if (horasDesde >= 2) {
+      await enviarAlerta(
+        `⚠️ APPCONTAGEM — Colibri sem importar há ${Math.floor(horasDesde)}h. ` +
+        `Última: ${ultima.importadoEm.toISOString()}. Verifique conectividade e tokens.`,
+      )
+      ultimoAlertaColibri = Date.now()
+      logger.warn({ horasDesde }, 'Alerta Colibri offline enviado')
+      return
+    }
+  }
 
-  await enviarAlerta(
-    `⚠️ APPCONTAGEM — Colibri sem importar há ${Math.floor(horasDesde)}h. ` +
-    `Última: ${ultima.importadoEm.toISOString()}. Verifique conectividade e tokens.`,
-  )
-  ultimoAlertaColibri = Date.now()
-  logger.warn({ horasDesde }, 'Alerta Colibri offline enviado')
+  // Check 2: ontem com 0 vendas (PDV local não está sincronizando com cloud)
+  // Roda só a partir das 10h — antes disso, crons da manhã ainda podem estar processando
+  if (hora < 10) return
+
+  const ontemStr = localOntem()
+  const ontemInicio = parseLocalDate(ontemStr, '00:00:00')
+  const ontemFim = parseLocalDate(ontemStr, '23:59:59')
+
+  const totalVendasOntem = await prisma.movimentacaoEstoque.count({
+    where: {
+      tipoMov: 'Saida',
+      referenciaOrigem: { startsWith: 'colibri:' },
+      dataMov: { gte: ontemInicio, lte: ontemFim },
+    },
+  })
+
+  if (totalVendasOntem === 0) {
+    await enviarAlerta(
+      `⚠️ APPCONTAGEM — Nenhuma venda do Colibri registrada para ontem (${ontemStr}). ` +
+      `Verifique se o PDV da pizzaria está sincronizando com o Colibri Cloud.`,
+    )
+    ultimoAlertaColibri = Date.now()
+    logger.warn({ ontemStr }, 'Alerta: 0 vendas Colibri no dia anterior')
+  }
 }
 
 async function fecharTurnosOrfaos() {
