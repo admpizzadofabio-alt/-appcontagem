@@ -1,7 +1,7 @@
 import { prisma } from '../../config/prisma.js'
 import { AppError, NotFoundError, BusinessRuleError, ForbiddenError } from '../../shared/errors.js'
 import { getDiaOperacional, categorizarDivergencia } from '../../shared/diaOperacional.js'
-import { formatLocalDate, localOntem, parseLocalDate } from '../../shared/dateLocal.js'
+import { formatLocalDate, localOntem, localNextDay, parseLocalDate } from '../../shared/dateLocal.js'
 import { enviarAlerta } from '../../shared/alertWebhook.js'
 import { validarBase64Imagem } from '../../shared/validarImagem.js'
 import { logger } from '../../config/logger.js'
@@ -183,14 +183,14 @@ export async function abrirTurno(local: string, operadorId: string, operadorSeto
     throw new BusinessRuleError(`Já existe turno aberto no ${local} (aberto em ${existente.abertoEm.toISOString()})`)
   }
 
-  // Importa vendas do Colibri antes do snapshot. Usa MESMO range do cron (ontem→hoje)
-  // pra que o refOrigem coincida e substituir=true funcione corretamente — evita
-  // duplicação de vendas entre cron e abertura de turno.
+  // Importa vendas do Colibri antes do snapshot — dia a dia para dataMov correto.
   const hojeStr = formatLocalDate()
   const ontemStr = localOntem()
   try {
-    await importarVendas({ dataInicio: ontemStr, dataFim: hojeStr, local, usuarioId: operadorId, usuarioNome: operadorId, substituir: true })
-    logger.info(`Colibri: importação pré-turno concluída (${ontemStr} → ${hojeStr})`)
+    for (const dia of [ontemStr, hojeStr]) {
+      await importarVendas({ dataInicio: dia, dataFim: dia, local, usuarioId: operadorId, usuarioNome: operadorId, substituir: true })
+    }
+    logger.info(`Colibri: importação pré-turno concluída (${ontemStr}, ${hojeStr})`)
   } catch (err) {
     logger.warn(`Colibri: falha na importação pré-turno — turno será aberto sem atualização: ${(err as Error).message}`)
   }

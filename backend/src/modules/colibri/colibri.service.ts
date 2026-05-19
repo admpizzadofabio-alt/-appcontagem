@@ -1,7 +1,7 @@
 import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { NotFoundError } from '../../shared/errors.js'
-import { formatLocalDate, localOntem, parseLocalDate } from '../../shared/dateLocal.js'
+import { formatLocalDate, localOntem, localNextDay, parseLocalDate } from '../../shared/dateLocal.js'
 import {
   fetchVendas,
   fetchCatalogo,
@@ -338,8 +338,8 @@ export async function importarVendas(params: {
 
     await prisma.colibriImportacao.create({
       data: {
-        dataInicio: new Date(params.dataInicio),
-        dataFim: new Date(params.dataFim),
+        dataInicio: parseLocalDate(params.dataInicio, '00:00:00'),
+        dataFim: parseLocalDate(params.dataFim, '23:59:59'),
         usuarioId: params.usuarioId,
         usuarioNome: params.usuarioNome,
         totalVendas: vendas.length,
@@ -387,38 +387,58 @@ export async function importarPendente(params: {
     orderBy: { dataFim: 'desc' },
   })
 
-  // Usa timezone local Brasília — toISOString seria UTC e quebra após 21h BRT.
   const hojeStr = formatLocalDate()
   const ontemStr = localOntem()
 
-  let dataInicio: string
-  let dataFim: string = hojeStr
-
   if (!ultima) {
-    // Nunca importou: começa pelo dia anterior (já fechado, dados completos no Colibri)
-    dataInicio = ontemStr
-    dataFim = ontemStr
-  } else {
-    // Sempre cobre últimos 2 dias — captura vendas tardias do dia anterior
-    // (noite após 16h cron, backend offline, etc) sem duplicar (substituir:true).
-    dataInicio = ontemStr
+    // Primeira vez: importa só ontem (dia completo, dados já fechados no Colibri)
+    return importarVendas({ dataInicio: ontemStr, dataFim: ontemStr, local: params.local, usuarioId: params.usuarioId, usuarioNome: params.usuarioNome })
   }
 
-  if (dataInicio > dataFim) {
-    return {
-      totalVendas: 0, totalImportados: 0, totalIgnorados: 0, erros: [],
-      status: 'sem_periodo',
-      aviso: 'Nenhum período pendente para importar.',
+  // Determina próximo dia a importar a partir do último dataFim registrado
+  // formatLocalDate converte corretamente para BRT independente de como foi armazenado
+  const ultimaStr = formatLocalDate(ultima.dataFim)
+  const proximoDia = ultimaStr >= hojeStr ? hojeStr : localNextDay(ultimaStr)
+
+  // Coleta todos os dias pendentes até hoje
+  const dias: string[] = []
+  let d = proximoDia
+  while (d <= hojeStr) {
+    dias.push(d)
+    d = localNextDay(d)
+  }
+
+  // Importa dia a dia e agrega resultados
+  let totalVendas = 0, totalImportados = 0, totalIgnorados = 0
+  const detalhes = { semVinculo: 0, semMarco: 0, antesDoMarco: 0, dedup: 0 }
+  const allErros: string[] = []
+  const todosProdutos: Array<{ nome: string; quantidade: number; local: string }> = []
+
+  for (const dia of dias) {
+    const res = await importarVendas({ dataInicio: dia, dataFim: dia, local: params.local, usuarioId: params.usuarioId, usuarioNome: params.usuarioNome })
+    if (res.status === 'aguardando' || res.status === 'em_andamento') return res
+    totalVendas += res.totalVendas
+    totalImportados += res.totalImportados
+    totalIgnorados += res.totalIgnorados
+    allErros.push(...res.erros)
+    if (res.produtosAtualizados) todosProdutos.push(...res.produtosAtualizados)
+    if (res.detalhesIgnorados) {
+      detalhes.semVinculo += res.detalhesIgnorados.semVinculo
+      detalhes.semMarco += res.detalhesIgnorados.semMarco
+      detalhes.antesDoMarco += res.detalhesIgnorados.antesDoMarco
+      detalhes.dedup += res.detalhesIgnorados.dedup
     }
   }
 
-  return importarVendas({
-    dataInicio,
-    dataFim,
-    local: params.local,
-    usuarioId: params.usuarioId,
-    usuarioNome: params.usuarioNome,
-  })
+  return {
+    totalVendas, totalImportados, totalIgnorados,
+    detalhesIgnorados: detalhes,
+    erros: allErros,
+    status: allErros.length > 0 ? 'parcial' : 'ok',
+    dataInicio: dias[0],
+    dataFim: dias[dias.length - 1],
+    produtosAtualizados: todosProdutos,
+  }
 }
 
 export async function getUltimaImportacao() {
@@ -465,20 +485,34 @@ export async function recuperarColibriStartup() {
   })
   if (!usuarioSistema) return
 
-  // Janela: do dia da última importação bem-sucedida até hoje.
-  // Cap de 7 dias para evitar imports gigantescos se a última foi muito antiga.
-  const hoje = new Date()
-  const limiteSete = new Date(); limiteSete.setDate(hoje.getDate() - 7)
-  const inicio = ultima.dataFim > limiteSete ? ultima.dataFim : limiteSete
+  // Janela: do dia seguinte ao último importado até hoje, cap de 7 dias.
+  const hojeStr = formatLocalDate()
+  const seteDiasAtras = localNextDay(localOntem(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)))
+  const ultimaStr = formatLocalDate(ultima.dataFim)
+  const proximoDia = ultimaStr >= seteDiasAtras ? localNextDay(ultimaStr) : seteDiasAtras
 
-  return importarVendas({
-    dataInicio: formatLocalDate(inicio),
-    dataFim: formatLocalDate(hoje),
-    local: 'Bar',
-    usuarioId: usuarioSistema.id,
-    usuarioNome: `${usuarioSistema.nome} (recuperação startup, ${Math.floor(horasDesde)}h sem cron)`,
-    substituir: true,
-  })
+  if (proximoDia > hojeStr) return null
+
+  const dias: string[] = []
+  let d = proximoDia
+  while (d <= hojeStr) { dias.push(d); d = localNextDay(d) }
+
+  let totalImportados = 0
+  for (const dia of dias) {
+    try {
+      const res = await importarVendas({
+        dataInicio: dia, dataFim: dia,
+        local: 'Bar',
+        usuarioId: usuarioSistema.id,
+        usuarioNome: `${usuarioSistema.nome} (recuperação startup)`,
+        substituir: true,
+      })
+      totalImportados += res.totalImportados
+    } catch (err) {
+      logger.error({ err, dia }, 'Erro recuperação Colibri startup')
+    }
+  }
+  return { dias: dias.length, totalImportados }
 }
 
 export async function listarImportacoes() {

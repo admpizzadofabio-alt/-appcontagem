@@ -30,6 +30,13 @@ export function localOntem(date: Date = new Date()): string {
   return formatLocalDate(d)
 }
 
+/** YYYY-MM-DD do dia seguinte a uma data YYYY-MM-DD (timezone Brasília). */
+export function localNextDay(dateStr: string): string {
+  const d = parseLocalDate(dateStr) // BRT midnight = UTC+3h — ancora segura
+  d.setUTCDate(d.getUTCDate() + 1)
+  return formatLocalDate(d)
+}
+
 /**
  * Constrói um Date a partir de YYYY-MM-DD assumindo timezone Brasília.
  * Ex: '2026-05-13' + '00:00:00' → 2026-05-13T03:00:00Z (BRT 00:00 = UTC 03:00)
