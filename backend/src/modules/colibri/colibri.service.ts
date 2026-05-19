@@ -292,6 +292,7 @@ export async function importarVendas(params: {
               referenciaOrigem: `colibri:${params.dataInicio}:${params.dataFim}`,
               aprovacaoStatus: 'Aprovado',
               idItemVendasColibri: info.ids.length > 0 ? JSON.stringify(info.ids) : null,
+              dataMov: parseLocalDate(params.dataFim, '23:59:59'),
             },
           })
 
