@@ -289,7 +289,7 @@ export function EstoqueScreen() {
                           {hist.colibri > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.danger }]}>-{hist.colibri}</Text><Text style={s.fluxoLabel}>Vendas</Text></View>}
                           {hist.entradas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.success }]}>+{hist.entradas}</Text><Text style={s.fluxoLabel}>Entradas</Text></View>}
                           {hist.perdas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.warning }]}>-{hist.perdas}</Text><Text style={s.fluxoLabel}>Perdas</Text></View>}
-                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Fechamento</Text></View>
+                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Saldo atual</Text></View>
                         </View>
                       )}
                       {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
@@ -332,7 +332,7 @@ export function EstoqueScreen() {
                           {hist.colibri > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.danger }]}>-{hist.colibri}</Text><Text style={s.fluxoLabel}>Vendas</Text></View>}
                           {hist.entradas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.success }]}>+{hist.entradas}</Text><Text style={s.fluxoLabel}>Entradas</Text></View>}
                           {hist.perdas > 0 && <View style={s.fluxoItem}><Text style={[s.fluxoVal, { color: colors.warning }]}>-{hist.perdas}</Text><Text style={s.fluxoLabel}>Perdas</Text></View>}
-                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Fechamento</Text></View>
+                          <View style={s.fluxoItem}><Text style={[s.fluxoVal, { fontWeight: '900' }]}>{hist.fechamento}</Text><Text style={s.fluxoLabel}>Saldo atual</Text></View>
                         </View>
                       )}
                       {_renderExpandHoje(e, data, isAdmin, qtdBloqueada, dataSelecionada)}
