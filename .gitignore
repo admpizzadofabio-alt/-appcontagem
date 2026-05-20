@@ -1,3 +1,7 @@
+# ── Documentação (mantida só local) ────────────────────
+*.md
+.claude/
+
 # ── Dependências ───────────────────────────────────────
 node_modules/
 .pnp
