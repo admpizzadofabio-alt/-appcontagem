@@ -46,6 +46,8 @@ export async function deletarTurno(
   }
 
   await prisma.$transaction(async (tx) => {
+    let movsColibri: { id: string }[] = []
+    let itensRevisados: { id: string }[] = []
     if (turno.contagemId) {
       // Rollback completo (modo teste): reverte estoque, apaga movimento de ajuste e marco
       const itens = await tx.itemContagem.findMany({
@@ -80,7 +82,7 @@ export async function deletarTurno(
       })
 
       // Rollback itens aprovados via revisão Admin (ajusteAprovado=false mas revisaoStatus Aceita/Ajustada/Perda)
-      const itensRevisados = await tx.itemContagem.findMany({
+      itensRevisados = await tx.itemContagem.findMany({
         where: { contagemId: turno.contagemId, revisaoStatus: { in: ['Aceita', 'Ajustada', 'Perda'] } },
       })
       for (const item of itensRevisados) {
@@ -123,7 +125,7 @@ export async function deletarTurno(
       // Estorna e apaga Saídas Colibri do diaOperacional do turno (rollback completo modo teste).
       // Usa diaOperacional (não janela de dataMov) para não apagar Colibri de dias adjacentes
       // quando o turno foi aberto próximo à meia-noite ou ficou aberto por mais de um dia.
-      const movsColibri = await tx.movimentacaoEstoque.findMany({
+      movsColibri = await tx.movimentacaoEstoque.findMany({
         where: {
           tipoMov: 'Saida',
           referenciaOrigem: { startsWith: 'colibri:' },
@@ -174,6 +176,10 @@ export async function deletarTurno(
             fechadoEm: turno.fechadoEm?.toISOString() ?? null,
             status: turno.status,
             tinhaContagem: !!turno.contagemId,
+            rollback: {
+              colibriDeletados: movsColibri.length,
+              itensContagemRevisados: itensRevisados.length,
+            },
           }),
         },
       })
