@@ -525,14 +525,121 @@ export async function finalizarContagem(contagemId: string, operadorId: string, 
 // === Revisão Admin: lista e decide casos pendentes ===
 
 export async function listarRevisoesPendentes() {
-  return prisma.itemContagem.findMany({
+  const itens = await prisma.itemContagem.findMany({
     where: { precisaRevisaoAdmin: true, revisaoStatus: 'Pendente' },
     include: {
       produto: { select: { nomeBebida: true, unidadeMedida: true, custoUnitario: true } },
-      contagem: { select: { local: true, dataContagem: true, operadorId: true, diaOperacional: true } },
+      contagem: { select: { id: true, turnoId: true, local: true, dataContagem: true, dataFechamento: true, operadorId: true, diaOperacional: true } },
     },
     orderBy: { contagem: { dataContagem: 'desc' } },
   })
+
+  if (itens.length === 0) return []
+
+  // Enriquece cada item com contexto que o Admin precisa para decidir:
+  // - estoqueAtualClampado: o que o EstoqueAtual real tem agora
+  // - saldoContabilAbertura: walk-forward até o início do turno (revela "dívida" da venda sem estoque)
+  // - totalColibri/Entradas/Perdas do período do turno
+  // - ultimaCargaInicial: quando foi e quanto
+  const produtoIds = [...new Set(itens.map((i) => i.produtoId))]
+  const locais = [...new Set(itens.map((i) => i.contagem.local))]
+
+  const [estoquesAtuais, cargasIniciais] = await Promise.all([
+    prisma.estoqueAtual.findMany({
+      where: { produtoId: { in: produtoIds }, local: { in: locais } },
+      select: { produtoId: true, local: true, quantidadeAtual: true },
+    }),
+    prisma.movimentacaoEstoque.findMany({
+      where: { produtoId: { in: produtoIds }, tipoMov: 'CargaInicial' },
+      orderBy: { dataMov: 'desc' },
+      select: { produtoId: true, localOrigem: true, quantidade: true, dataMov: true },
+    }),
+  ])
+  const estoqueMap = new Map(estoquesAtuais.map((e) => [`${e.produtoId}:${e.local}`, e.quantidadeAtual]))
+  const cargaMap = new Map<string, { quantidade: number; dataMov: Date }>()
+  for (const c of cargasIniciais) {
+    const key = `${c.produtoId}:${c.localOrigem ?? ''}`
+    if (!cargaMap.has(key)) cargaMap.set(key, { quantidade: c.quantidade, dataMov: c.dataMov })
+  }
+
+  // Para saldo contábil e movs do turno, precisa do turno (abertoEm, fechadoEm)
+  const turnoIds = [...new Set(itens.map((i) => i.contagem.turnoId).filter((id): id is string => !!id))]
+  const turnos = turnoIds.length > 0
+    ? await prisma.fechamentoTurno.findMany({
+        where: { id: { in: turnoIds } },
+        select: { id: true, abertoEm: true, fechadoEm: true, local: true },
+      })
+    : []
+  const turnoMap = new Map(turnos.map((t) => [t.id, t]))
+
+  return Promise.all(itens.map(async (item) => {
+    const local = item.contagem.local
+    const turno = item.contagem.turnoId ? turnoMap.get(item.contagem.turnoId) : undefined
+
+    // Saldo contábil de abertura via walk-forward
+    let saldoContabilAbertura = item.quantidadeSistema
+    let totalColibri = 0, totalEntradas = 0, totalPerdas = 0
+    if (turno) {
+      const movsAntes = await prisma.movimentacaoEstoque.findMany({
+        where: {
+          dataMov: { lt: turno.abertoEm },
+          produtoId: item.produtoId,
+          OR: [{ localOrigem: local }, { localDestino: local }],
+          aprovacaoStatus: 'Aprovado',
+        },
+        orderBy: { dataMov: 'asc' },
+        select: { tipoMov: true, quantidade: true, localOrigem: true, localDestino: true },
+      })
+      let saldo = 0
+      for (const m of movsAntes) {
+        switch (m.tipoMov) {
+          case 'CargaInicial': saldo = m.quantidade; break
+          case 'Entrada':      if (m.localDestino === local) saldo += m.quantidade; break
+          case 'Saida':
+          case 'AjustePerda':  if (m.localOrigem  === local) saldo -= m.quantidade; break
+          case 'Transferencia':
+            if (m.localOrigem  === local) saldo -= m.quantidade
+            if (m.localDestino === local) saldo += m.quantidade
+            break
+          case 'AjusteContagem':
+            if (m.localDestino === local) saldo += m.quantidade
+            if (m.localOrigem  === local) saldo -= m.quantidade
+            break
+        }
+      }
+      saldoContabilAbertura = saldo
+
+      // Movs do turno (entre abertoEm e fechadoEm ou agora)
+      const fim = turno.fechadoEm ?? new Date()
+      const movsTurno = await prisma.movimentacaoEstoque.findMany({
+        where: {
+          dataMov: { gte: turno.abertoEm, lte: fim },
+          produtoId: item.produtoId,
+          OR: [{ localOrigem: local }, { localDestino: local }],
+          aprovacaoStatus: 'Aprovado',
+        },
+        select: { tipoMov: true, quantidade: true, localOrigem: true, localDestino: true, referenciaOrigem: true },
+      })
+      for (const m of movsTurno) {
+        if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:') && m.localOrigem === local) totalColibri += m.quantidade
+        else if (m.tipoMov === 'Entrada' && m.localDestino === local) totalEntradas += m.quantidade
+        else if (m.tipoMov === 'AjustePerda' && m.localOrigem === local) totalPerdas += m.quantidade
+      }
+    }
+
+    const carga = cargaMap.get(`${item.produtoId}:${local}`)
+    return {
+      ...item,
+      contexto: {
+        estoqueAtualClampado: estoqueMap.get(`${item.produtoId}:${local}`) ?? 0,
+        saldoContabilAbertura,
+        totalColibri,
+        totalEntradas,
+        totalPerdas,
+        ultimaCargaInicial: carga ? { quantidade: carga.quantidade, dataMov: carga.dataMov.toISOString() } : null,
+      },
+    }
+  }))
 }
 
 export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar' | 'perda' | 'recontagem', revisorId: string, decisao?: string, novaQuantidade?: number) {

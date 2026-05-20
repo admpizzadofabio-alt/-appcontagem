@@ -149,6 +149,47 @@ function AbaRevisoesContent() {
                     </>
                   )}
                 </View>
+                {r.contexto && (
+                  <View style={s.revisaoCtxBox}>
+                    <Text style={s.revisaoCtxTitle}>📊 Contexto do período</Text>
+                    <View style={s.revisaoCtxRow}>
+                      <Text style={s.revisaoCtxLabel}>Saldo contábil (início):</Text>
+                      <Text style={[s.revisaoCtxVal, r.contexto.saldoContabilAbertura < 0 && { color: colors.danger, fontWeight: '800' }]}>
+                        {r.contexto.saldoContabilAbertura}
+                      </Text>
+                    </View>
+                    <View style={s.revisaoCtxRow}>
+                      <Text style={s.revisaoCtxLabel}>Estoque físico atual:</Text>
+                      <Text style={s.revisaoCtxVal}>{r.contexto.estoqueAtualClampado}</Text>
+                    </View>
+                    {r.contexto.totalColibri > 0 && (
+                      <View style={s.revisaoCtxRow}>
+                        <Text style={s.revisaoCtxLabel}>Vendas Colibri (turno):</Text>
+                        <Text style={s.revisaoCtxVal}>-{r.contexto.totalColibri}</Text>
+                      </View>
+                    )}
+                    {r.contexto.totalEntradas > 0 && (
+                      <View style={s.revisaoCtxRow}>
+                        <Text style={s.revisaoCtxLabel}>Entradas (turno):</Text>
+                        <Text style={s.revisaoCtxVal}>+{r.contexto.totalEntradas}</Text>
+                      </View>
+                    )}
+                    {r.contexto.totalPerdas > 0 && (
+                      <View style={s.revisaoCtxRow}>
+                        <Text style={s.revisaoCtxLabel}>Perdas (turno):</Text>
+                        <Text style={s.revisaoCtxVal}>-{r.contexto.totalPerdas}</Text>
+                      </View>
+                    )}
+                    {r.contexto.ultimaCargaInicial && (
+                      <View style={s.revisaoCtxRow}>
+                        <Text style={s.revisaoCtxLabel}>Última carga inicial:</Text>
+                        <Text style={s.revisaoCtxVal}>
+                          {r.contexto.ultimaCargaInicial.quantidade} em {new Date(r.contexto.ultimaCargaInicial.dataMov).toLocaleDateString('pt-BR')}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
                 {r.justificativa && (
                   <View style={s.revisaoJustifBox}>
                     <Text style={s.revisaoJustif}>💬 {r.justificativa}</Text>
@@ -1075,6 +1116,11 @@ const s = StyleSheet.create({
   revisaoStatSep: { width: 1, backgroundColor: colors.border, marginVertical: 4 },
   revisaoJustifBox: { backgroundColor: colors.warningLight, borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.warning },
   revisaoJustif: { fontSize: 12, color: colors.text, fontStyle: 'italic' },
+  revisaoCtxBox: { backgroundColor: colors.surfaceAlt, borderRadius: 8, padding: 10, marginTop: 8, gap: 4 },
+  revisaoCtxTitle: { fontSize: 11, fontWeight: '800', color: colors.textSub, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  revisaoCtxRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  revisaoCtxLabel: { fontSize: 12, color: colors.textSub },
+  revisaoCtxVal: { fontSize: 12, color: colors.text, fontWeight: '700' },
   revisaoAcao: { fontSize: 12, color: colors.primary, fontWeight: '700', textAlign: 'right' },
   acaoBtn: { padding: 14, borderRadius: 12, alignItems: 'center' },
   acaoBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },

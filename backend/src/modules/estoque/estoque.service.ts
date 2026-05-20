@@ -116,6 +116,41 @@ export async function historico(data: string, local: string) {
       select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, referenciaOrigem: true },
     })
 
+    // Saldo contábil de abertura: walk-forward de TODAS as movs até turno.abertoEm.
+    // Reflete a "dívida" matemática quando houve venda sem estoque suficiente (negativo).
+    // Independente do EstoqueAtual (que é clampado em 0 por invariante).
+    const produtoIdsContagem = contagem.itens.map((i) => i.produtoId)
+    const movsAntesTurno = produtoIdsContagem.length > 0
+      ? await prisma.movimentacaoEstoque.findMany({
+          where: {
+            dataMov: { lt: turno.abertoEm },
+            produtoId: { in: produtoIdsContagem },
+            OR: [{ localOrigem: local }, { localDestino: local }],
+            aprovacaoStatus: 'Aprovado',
+          },
+          orderBy: { dataMov: 'asc' },
+          select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, localDestino: true },
+        })
+      : []
+    const aberturaContabil = new Map<string, number>()
+    for (const m of movsAntesTurno) {
+      const cur = aberturaContabil.get(m.produtoId) ?? 0
+      switch (m.tipoMov) {
+        case 'CargaInicial': aberturaContabil.set(m.produtoId, m.quantidade); break
+        case 'Entrada':       if (m.localDestino === local) aberturaContabil.set(m.produtoId, cur + m.quantidade); break
+        case 'Saida':
+        case 'AjustePerda':   if (m.localOrigem === local) aberturaContabil.set(m.produtoId, cur - m.quantidade); break
+        case 'Transferencia':
+          if (m.localOrigem === local)  aberturaContabil.set(m.produtoId, cur - m.quantidade)
+          if (m.localDestino === local) aberturaContabil.set(m.produtoId, (aberturaContabil.get(m.produtoId) ?? 0) + m.quantidade)
+          break
+        case 'AjusteContagem':
+          if (m.localDestino === local) aberturaContabil.set(m.produtoId, cur + m.quantidade)
+          if (m.localOrigem  === local) aberturaContabil.set(m.produtoId, cur - m.quantidade)
+          break
+      }
+    }
+
     type ProdEntry = {
       produtoId: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number
       abertura: number; contado: number; divergencia: number
@@ -124,13 +159,18 @@ export async function historico(data: string, local: string) {
     }
     const map = new Map<string, ProdEntry>()
     for (const item of contagem.itens) {
+      // Abertura prioriza saldo contábil (walk-forward); fallback para quantidadeSistema
+      // (caso o produto não tenha histórico — produtos novos).
+      const aberturaCalc = aberturaContabil.has(item.produtoId)
+        ? aberturaContabil.get(item.produtoId)!
+        : item.quantidadeSistema
       map.set(item.produtoId, {
         produtoId: item.produtoId,
         nomeBebida: item.produto.nomeBebida,
         categoria: item.produto.categoria,
         unidadeMedida: item.produto.unidadeMedida,
         custoUnitario: item.produto.custoUnitario,
-        abertura: item.quantidadeSistema,
+        abertura: aberturaCalc,
         contado: item.quantidadeContada,
         divergencia: item.diferenca,
         colibri: 0, entradas: 0, perdas: 0, fechamento: 0,

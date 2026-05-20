@@ -40,6 +40,14 @@ export type ItemContagem = {
 export type RevisaoPendente = ItemContagem & {
   contagem: { local: string; dataContagem: string; operadorId: string; diaOperacional: string }
   produto: { nomeBebida: string; unidadeMedida: string; custoUnitario: number }
+  contexto?: {
+    estoqueAtualClampado: number
+    saldoContabilAbertura: number
+    totalColibri: number
+    totalEntradas: number
+    totalPerdas: number
+    ultimaCargaInicial: { quantidade: number; dataMov: string } | null
+  }
 }
 
 // Versão sem quantidadeSistema — usada durante a contagem para garantir modo cego
