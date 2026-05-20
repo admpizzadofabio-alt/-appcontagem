@@ -79,6 +79,47 @@ export async function deletarTurno(
         where: { referenciaOrigem: `contagem:${turno.contagemId}` },
       })
 
+      // Rollback itens aprovados via revisão Admin (ajusteAprovado=false mas revisaoStatus Aceita/Ajustada/Perda)
+      const itensRevisados = await tx.itemContagem.findMany({
+        where: { contagemId: turno.contagemId, revisaoStatus: { in: ['Aceita', 'Ajustada', 'Perda'] } },
+      })
+      for (const item of itensRevisados) {
+        if (item.diferenca !== 0) {
+          const ea = await tx.estoqueAtual.findUnique({
+            where: { produtoId_local: { produtoId: item.produtoId, local: turno.local } },
+          })
+          if (ea) {
+            await tx.estoqueAtual.update({
+              where: { produtoId_local: { produtoId: item.produtoId, local: turno.local } },
+              data: { quantidadeAtual: ea.quantidadeAtual - item.diferenca },
+            })
+          }
+        }
+        const cargaInicial = await tx.movimentacaoEstoque.findFirst({
+          where: { produtoId: item.produtoId, tipoMov: 'CargaInicial' },
+          orderBy: { dataMov: 'desc' },
+        })
+        if (cargaInicial) {
+          await tx.produto.update({
+            where: { id: item.produtoId },
+            data: { marcoInicialEm: cargaInicial.dataMov },
+          })
+        }
+      }
+      if (itensRevisados.length > 0) {
+        await tx.movimentacaoEstoque.deleteMany({
+          where: {
+            referenciaOrigem: {
+              in: itensRevisados.flatMap((i) => [
+                `revisao:${i.id}:aceitar`,
+                `revisao:${i.id}:ajustar`,
+                `revisao:${i.id}:perda`,
+              ]),
+            },
+          },
+        })
+      }
+
       // Estorna e apaga Saídas Colibri criadas DURANTE o turno (rollback completo modo teste).
       // Sem isso, ao apagar o turno o estoque ficaria "negativo" pelos descontos do Colibri.
       const fimWindow = turno.fechadoEm ?? new Date()
