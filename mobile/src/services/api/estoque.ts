@@ -22,6 +22,7 @@ export type EstoqueHistoricoItem = {
   entradas: number
   perdas: number
   fechamento: number
+  precisaRevisao?: boolean
 }
 
 export type EstoqueHistorico = {

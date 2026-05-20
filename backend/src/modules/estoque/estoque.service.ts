@@ -120,6 +120,7 @@ export async function historico(data: string, local: string) {
       produtoId: string; nomeBebida: string; categoria: string; unidadeMedida: string; custoUnitario: number
       abertura: number; contado: number; divergencia: number
       colibri: number; entradas: number; perdas: number; fechamento: number
+      precisaRevisao: boolean
     }
     const map = new Map<string, ProdEntry>()
     for (const item of contagem.itens) {
@@ -133,6 +134,9 @@ export async function historico(data: string, local: string) {
         contado: item.quantidadeContada,
         divergencia: item.diferenca,
         colibri: 0, entradas: 0, perdas: 0, fechamento: 0,
+        // Sinaliza quando a contagem ainda não refletiu no EstoqueAtual real
+        // (divergência grande/venda sem estoque aguardando decisão do Admin)
+        precisaRevisao: !!item.precisaRevisaoAdmin && item.revisaoStatus === 'Pendente',
       })
     }
     const semEntry = movs.map((m) => m.produtoId).filter((id) => !map.has(id))
@@ -142,7 +146,7 @@ export async function historico(data: string, local: string) {
         select: { id: true, nomeBebida: true, categoria: true, unidadeMedida: true, custoUnitario: true },
       })
       for (const p of extras) {
-        map.set(p.id, { produtoId: p.id, nomeBebida: p.nomeBebida, categoria: p.categoria, unidadeMedida: p.unidadeMedida, custoUnitario: p.custoUnitario, abertura: 0, contado: 0, divergencia: 0, colibri: 0, entradas: 0, perdas: 0, fechamento: 0 })
+        map.set(p.id, { produtoId: p.id, nomeBebida: p.nomeBebida, categoria: p.categoria, unidadeMedida: p.unidadeMedida, custoUnitario: p.custoUnitario, abertura: 0, contado: 0, divergencia: 0, colibri: 0, entradas: 0, perdas: 0, fechamento: 0, precisaRevisao: false })
       }
     }
     for (const m of movs) {
@@ -256,6 +260,7 @@ export async function historico(data: string, local: string) {
         divergencia: 0,
         colibri: mv.colibri, entradas: mv.entradas, perdas: mv.perdas,
         fechamento: workMap.get(p.id) ?? 0,
+        precisaRevisao: false,
       }
     })
     // Mostra qualquer produto que tinha estoque na abertura, fechou com saldo (positivo/negativo)
