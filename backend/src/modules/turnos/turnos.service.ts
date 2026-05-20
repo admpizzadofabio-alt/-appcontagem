@@ -120,14 +120,14 @@ export async function deletarTurno(
         })
       }
 
-      // Estorna e apaga Saídas Colibri criadas DURANTE o turno (rollback completo modo teste).
-      // Sem isso, ao apagar o turno o estoque ficaria "negativo" pelos descontos do Colibri.
-      const fimWindow = turno.fechadoEm ?? new Date()
+      // Estorna e apaga Saídas Colibri do diaOperacional do turno (rollback completo modo teste).
+      // Usa diaOperacional (não janela de dataMov) para não apagar Colibri de dias adjacentes
+      // quando o turno foi aberto próximo à meia-noite ou ficou aberto por mais de um dia.
       const movsColibri = await tx.movimentacaoEstoque.findMany({
         where: {
           tipoMov: 'Saida',
           referenciaOrigem: { startsWith: 'colibri:' },
-          dataMov: { gte: turno.abertoEm, lte: fimWindow },
+          diaOperacional: turno.diaOperacional,
           OR: [{ localOrigem: turno.local }, { localDestino: turno.local }],
         },
       })
