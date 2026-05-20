@@ -257,7 +257,8 @@ export async function importarVendas(params: {
       const key = mapeamento.produtoId
       const qtd = venda.quantitySold * mapeamento.fatorConv
       const setor = setorPorProduto.get(mapeamento.produtoId) ?? 'Bar'
-      const localProduto = setor === 'Delivery' ? 'Delivery' : 'Bar'
+      // 'Todos' e ausência caem em 'Bar' (default histórico); 'Delivery'/'Vinhos' usam seu próprio estoque
+      const localProduto = (setor === 'Delivery' || setor === 'Vinhos') ? setor : 'Bar'
       const atual = totaisPorProduto.get(key)
       if (atual) {
         atual.quantidade += qtd

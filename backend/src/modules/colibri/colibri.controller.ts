@@ -107,7 +107,7 @@ export async function postImportarPendente(req: Request, res: Response, next: Ne
   try {
     const usuario = req.user
     if (!usuario) return res.status(401).json({ error: 'Não autenticado' })
-    const local = usuario.setor === 'Delivery' ? 'Delivery' : 'Bar'
+    const local = (usuario.setor === 'Delivery' || usuario.setor === 'Vinhos') ? usuario.setor : 'Bar'
     const resultado = await importarPendente({
       local,
       usuarioId: usuario.sub,
