@@ -226,27 +226,41 @@ export async function historico(data: string, local: string) {
 
   const movsDoDia = movsTodos.filter((m) => m.dataMov >= inicioDia)
   const resumo = { totalDivergencias: 0, totalColibri: 0, totalEntradas: 0, totalPerdas: 0 }
+  const movsPorProduto = new Map<string, { colibri: number; entradas: number; perdas: number }>()
   for (const m of movsDoDia) {
-    if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:') && m.localOrigem === local)
+    const p = movsPorProduto.get(m.produtoId) ?? { colibri: 0, entradas: 0, perdas: 0 }
+    if (m.tipoMov === 'Saida' && m.referenciaOrigem?.startsWith('colibri:') && m.localOrigem === local) {
       resumo.totalColibri += m.quantidade
-    else if (m.tipoMov === 'Entrada' && m.localDestino === local) resumo.totalEntradas += m.quantidade
-    else if (m.tipoMov === 'AjustePerda' && m.localOrigem === local) resumo.totalPerdas += m.quantidade
+      p.colibri += m.quantidade
+    } else if (m.tipoMov === 'Entrada' && m.localDestino === local) {
+      resumo.totalEntradas += m.quantidade
+      p.entradas += m.quantidade
+    } else if (m.tipoMov === 'AjustePerda' && m.localOrigem === local) {
+      resumo.totalPerdas += m.quantidade
+      p.perdas += m.quantidade
+    }
+    movsPorProduto.set(m.produtoId, p)
   }
 
   const produtos = produtosInfo
-    .map((p) => ({
-      produtoId: p.id,
-      nomeBebida: p.nomeBebida,
-      categoria: p.categoria,
-      unidadeMedida: p.unidadeMedida,
-      custoUnitario: p.custoUnitario,
-      abertura: aberturaMap.get(p.id) ?? 0,
-      contado: 0,
-      divergencia: 0,
-      colibri: 0, entradas: 0, perdas: 0,
-      fechamento: workMap.get(p.id) ?? 0,
-    }))
-    .filter((p) => p.fechamento > 0)
+    .map((p) => {
+      const mv = movsPorProduto.get(p.id) ?? { colibri: 0, entradas: 0, perdas: 0 }
+      return {
+        produtoId: p.id,
+        nomeBebida: p.nomeBebida,
+        categoria: p.categoria,
+        unidadeMedida: p.unidadeMedida,
+        custoUnitario: p.custoUnitario,
+        abertura: aberturaMap.get(p.id) ?? 0,
+        contado: 0,
+        divergencia: 0,
+        colibri: mv.colibri, entradas: mv.entradas, perdas: mv.perdas,
+        fechamento: workMap.get(p.id) ?? 0,
+      }
+    })
+    // Mostra qualquer produto que tinha estoque na abertura, fechou com saldo (positivo/negativo)
+    // ou teve movimento no dia. Saldo negativo é exibido para sinalizar "venda sem estoque".
+    .filter((p) => p.abertura !== 0 || p.fechamento !== 0 || p.colibri > 0 || p.entradas > 0 || p.perdas > 0)
     .sort((a, b) => a.nomeBebida.localeCompare(b.nomeBebida))
 
   if (produtos.length === 0) {
