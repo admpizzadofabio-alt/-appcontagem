@@ -97,9 +97,14 @@ export async function historico(data: string, local: string) {
       })
     : null
 
-  // CASO 1: turno com contagem — lógica original intacta
+  // Só considera a contagem como "fonte de verdade" do histórico se foi FECHADA.
+  // Contagem Aberta/Cancelada não deve aparecer como fechamento — cai no CASO 2.
+  const contagemFechada = contagem?.status === 'Fechada' ? contagem : null
+
+  // CASO 1: turno com contagem fechada — lógica original intacta
   // Movimentos contam apenas APÓS a contagem (evita double-count com quantidadeSistema)
-  if (turno && contagem) {
+  if (turno && contagemFechada) {
+    const contagem = contagemFechada
     const inicioMov = contagem.dataFechamento ?? turno.abertoEm
     const fimMov = turno.fechadoEm ?? new Date()
     const movs = await prisma.movimentacaoEstoque.findMany({
