@@ -1,11 +1,13 @@
 import { prisma } from '../../config/prisma.js'
 import { getDiaOperacional } from '../../shared/diaOperacional.js'
 
-export async function getMeuTurno(usuarioId: string, setor: string) {
+export async function getMeuTurno(usuarioId: string, setor: string, localOverride?: 'Bar' | 'Delivery' | 'Vinhos') {
   const hoje = getDiaOperacional()
 
-  // Setor 'Admin' / 'Todos' não tem turno próprio — usa Bar como fallback
-  const local = (setor === 'Admin' || setor === 'Todos') ? 'Bar' : setor
+  // Admin/Supervisor passa localOverride para inspecionar setor específico (validado no controller).
+  // Setor 'Admin' / 'Todos' sem override cai em Bar (default histórico).
+  const local = localOverride
+    ?? ((setor === 'Admin' || setor === 'Todos') ? 'Bar' : setor)
 
   // ── 1. Turno ativo ou último turno do dia para o local do operador ──
   const turno = await prisma.fechamentoTurno.findFirst({

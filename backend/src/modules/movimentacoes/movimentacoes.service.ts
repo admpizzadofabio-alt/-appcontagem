@@ -29,9 +29,19 @@ type CriarData = {
   justificativaEntrada?: string
 }
 
+const LOCAIS_VALIDOS = ['Bar', 'Delivery', 'Vinhos'] as const
+
 export async function criar(data: CriarData) {
   const produto = await prisma.produto.findUnique({ where: { id: data.produtoId } })
   if (!produto) throw new NotFoundError('Produto não encontrado')
+
+  // Defense in depth: Zod já valida na entrada, mas garantimos no service também.
+  if (data.localOrigem && !LOCAIS_VALIDOS.includes(data.localOrigem as typeof LOCAIS_VALIDOS[number])) {
+    throw new BusinessRuleError(`Local de origem inválido: ${data.localOrigem}`)
+  }
+  if (data.localDestino && !LOCAIS_VALIDOS.includes(data.localDestino as typeof LOCAIS_VALIDOS[number])) {
+    throw new BusinessRuleError(`Local de destino inválido: ${data.localDestino}`)
+  }
 
   // VULN-002: CargaInicial exige Admin ou Supervisor
   if (data.tipoMov === 'CargaInicial' && data.nivelAcesso !== 'Admin' && data.nivelAcesso !== 'Supervisor') {

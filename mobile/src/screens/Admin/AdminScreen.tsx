@@ -220,12 +220,13 @@ function AbaRevisoesContent() {
 
 function AbaPerdasContent() {
   const { data: pendentes = [], isLoading } = useListarPendentesQuery()
-  const [aprovar] = useAprovarMovimentacaoMutation()
-  const [rejeitar] = useRejeitarMovimentacaoMutation()
+  const [aprovar, { isLoading: aprovando }] = useAprovarMovimentacaoMutation()
+  const [rejeitar, { isLoading: rejeitando }] = useRejeitarMovimentacaoMutation()
   const [modalId, setModalId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
 
   async function handleAprovar(id: string) {
+    if (aprovando) return // previne clique duplo
     try {
       await aprovar({ id }).unwrap()
       Alert.alert('Aprovado', 'Movimentação aprovada e estoque atualizado.')
@@ -233,6 +234,7 @@ function AbaPerdasContent() {
   }
 
   async function confirmarRejeitar() {
+    if (rejeitando) return // previne clique duplo
     if (!modalId || !motivo.trim()) { Alert.alert('Atenção', 'Informe o motivo.'); return }
     try {
       await rejeitar({ id: modalId, motivo: motivo.trim() }).unwrap()
@@ -281,8 +283,8 @@ function AbaPerdasContent() {
                 </View>
               )}
               <View style={s.acoes}>
-                <ActionButton label="Rejeitar" onPress={() => { setMotivo(''); setModalId(p.id) }} variant="danger" style={{ flex: 1 }} />
-                <ActionButton label="Aprovar" onPress={() => handleAprovar(p.id)} style={{ flex: 1 }} />
+                <ActionButton label="Rejeitar" onPress={() => { setMotivo(''); setModalId(p.id) }} variant="danger" style={{ flex: 1 }} disabled={aprovando || rejeitando} />
+                <ActionButton label={aprovando ? 'Aprovando...' : 'Aprovar'} onPress={() => handleAprovar(p.id)} style={{ flex: 1 }} disabled={aprovando || rejeitando} />
               </View>
             </Card>
           )
@@ -296,8 +298,8 @@ function AbaPerdasContent() {
             <Text style={s.modalSub}>Informe o motivo ao solicitante.</Text>
             <TextInput style={s.input} value={motivo} onChangeText={setMotivo} placeholder="Motivo da rejeição..." placeholderTextColor={colors.textMuted} multiline numberOfLines={3} autoFocus />
             <View style={s.modalAcoes}>
-              <Pressable style={s.btnCancelar} onPress={() => setModalId(null)}><Text style={s.btnCancelarTxt}>Cancelar</Text></Pressable>
-              <Pressable style={s.btnConfirmar} onPress={confirmarRejeitar}><Text style={s.btnConfirmarTxt}>Rejeitar</Text></Pressable>
+              <Pressable style={s.btnCancelar} onPress={() => setModalId(null)} disabled={rejeitando}><Text style={s.btnCancelarTxt}>Cancelar</Text></Pressable>
+              <Pressable style={[s.btnConfirmar, rejeitando && { opacity: 0.6 }]} onPress={confirmarRejeitar} disabled={rejeitando}><Text style={s.btnConfirmarTxt}>{rejeitando ? 'Rejeitando...' : 'Rejeitar'}</Text></Pressable>
             </View>
           </View>
         </View>

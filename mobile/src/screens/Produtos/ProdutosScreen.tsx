@@ -47,9 +47,12 @@ export function ProdutosScreen() {
   const [cargaInicial] = useCargaInicialMutation()
 
   async function handleCargaInicial(p: { id: string; nomeBebida: string; setorPadrao: string }) {
+    // Para setor específico (Bar/Delivery/Vinhos), usa o próprio; 'Todos' cai em Bar (default histórico)
+    const local: 'Bar' | 'Delivery' | 'Vinhos' =
+      p.setorPadrao === 'Delivery' || p.setorPadrao === 'Vinhos' ? p.setorPadrao : 'Bar'
     Alert.prompt(
       'Carga Inicial — ' + p.nomeBebida,
-      `Quantidade física no estoque agora (${p.setorPadrao === 'Delivery' ? 'Delivery' : 'Bar'}).\nA partir deste momento o Colibri começa a descontar.`,
+      `Quantidade física no estoque agora (${local}).\nA partir deste momento o Colibri começa a descontar.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -57,7 +60,6 @@ export function ProdutosScreen() {
           onPress: async (txt?: string) => {
             const qtd = parseFloat((txt ?? '').replace(',', '.'))
             if (Number.isNaN(qtd) || qtd <= 0) return Alert.alert('Atenção', 'Quantidade inválida')
-            const local = p.setorPadrao === 'Delivery' ? 'Delivery' : 'Bar'
             try {
               const r = await cargaInicial({ id: p.id, quantidade: qtd, local }).unwrap()
               Alert.alert('✅ Carga registrada', r.mensagem)
