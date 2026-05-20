@@ -645,7 +645,7 @@ export async function listarRevisoesPendentes() {
 export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar' | 'perda' | 'recontagem', revisorId: string, decisao?: string, novaQuantidade?: number) {
   const item = await prisma.itemContagem.findUnique({
     where: { id: itemId },
-    include: { contagem: { select: { local: true } } },
+    include: { contagem: { select: { local: true, dataFechamento: true } } },
   })
   if (!item) throw new NotFoundError('Item de contagem não encontrado')
   if (!item.precisaRevisaoAdmin || item.revisaoStatus !== 'Pendente') {
@@ -660,9 +660,26 @@ export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar'
     })
     const estoqueAtualQtd = estoqueAtualReg?.quantidadeAtual ?? 0
 
+    // Movimentos após o fechamento da contagem (ex: perda registrada antes da aprovação Admin)
+    // devem ser respeitados — a aprovação aceita o valor contado NAQUELE momento e mantém delta posterior
+    const refTime = item.contagem.dataFechamento ?? new Date()
+    const movsApos = await tx.movimentacaoEstoque.findMany({
+      where: {
+        produtoId: item.produtoId,
+        localOrigem: local,
+        aprovacaoStatus: 'Aprovado',
+        tipoMov: { in: ['Saida', 'AjustePerda', 'Transferencia', 'Entrada', 'CargaInicial'] },
+        dataMov: { gt: refTime },
+      },
+    })
+    const netApos = movsApos.reduce((acc, m) => {
+      return m.tipoMov === 'Entrada' || m.tipoMov === 'CargaInicial' ? acc + m.quantidade : acc - m.quantidade
+    }, 0)
+    const qtdFinal = item.quantidadeContada + netApos
+
     if (acao === 'aceitar') {
-      // Aceita o que o operador contou — cria AjusteContagem para auditoria
-      const delta = item.quantidadeContada - estoqueAtualQtd
+      // Aceita o que o operador contou + respeita movimentos pós-contagem (ex: perda antes da aprovação)
+      const delta = qtdFinal - estoqueAtualQtd
       if (delta !== 0) {
         await tx.movimentacaoEstoque.create({
           data: {
@@ -671,7 +688,7 @@ export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar'
             quantidade: Math.abs(delta),
             localOrigem: local,
             usuarioId: revisorId,
-            observacao: `Revisão Admin: aceitar contagem (${estoqueAtualQtd} → ${item.quantidadeContada}). ${decisao ?? ''}`.trim(),
+            observacao: `Revisão Admin: aceitar contagem (${estoqueAtualQtd} → ${qtdFinal}). ${decisao ?? ''}`.trim(),
             aprovacaoStatus: 'Aprovado',
             referenciaOrigem: `revisao:${itemId}:aceitar`,
           },
@@ -679,8 +696,8 @@ export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar'
       }
       await tx.estoqueAtual.upsert({
         where: { produtoId_local: { produtoId: item.produtoId, local } },
-        create: { produtoId: item.produtoId, local, quantidadeAtual: item.quantidadeContada, atualizadoPor: revisorId },
-        update: { quantidadeAtual: item.quantidadeContada, atualizadoPor: revisorId },
+        create: { produtoId: item.produtoId, local, quantidadeAtual: qtdFinal, atualizadoPor: revisorId },
+        update: { quantidadeAtual: qtdFinal, atualizadoPor: revisorId },
       })
       // Marco avança para a data da decisão
       await tx.produto.update({ where: { id: item.produtoId }, data: { marcoInicialEm: new Date() } })
@@ -708,8 +725,8 @@ export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar'
       })
       await tx.produto.update({ where: { id: item.produtoId }, data: { marcoInicialEm: new Date() } })
     } else if (acao === 'perda') {
-      // Registra a divergência como AjustePerda — usa diff entre estoque atual e contado
-      const qtdPerda = Math.max(0, estoqueAtualQtd - item.quantidadeContada)
+      // Registra a divergência como AjustePerda — usa diff entre estoque atual e qtd final (contagem + pós)
+      const qtdPerda = Math.max(0, estoqueAtualQtd - qtdFinal)
       if (qtdPerda > 0) {
         await tx.movimentacaoEstoque.create({
           data: {
@@ -718,15 +735,15 @@ export async function decidirRevisao(itemId: string, acao: 'aceitar' | 'ajustar'
             quantidade: qtdPerda,
             localOrigem: local,
             usuarioId: revisorId,
-            observacao: `Revisão Admin: perda (${estoqueAtualQtd} → ${item.quantidadeContada}). ${decisao ?? ''}`.trim(),
+            observacao: `Revisão Admin: perda (${estoqueAtualQtd} → ${qtdFinal}). ${decisao ?? ''}`.trim(),
             aprovacaoStatus: 'Aprovado',
             referenciaOrigem: `revisao:${itemId}:perda`,
           },
         })
         await tx.estoqueAtual.upsert({
           where: { produtoId_local: { produtoId: item.produtoId, local } },
-          create: { produtoId: item.produtoId, local, quantidadeAtual: item.quantidadeContada, atualizadoPor: revisorId },
-          update: { quantidadeAtual: item.quantidadeContada, atualizadoPor: revisorId },
+          create: { produtoId: item.produtoId, local, quantidadeAtual: qtdFinal, atualizadoPor: revisorId },
+          update: { quantidadeAtual: qtdFinal, atualizadoPor: revisorId },
         })
         await tx.produto.update({ where: { id: item.produtoId }, data: { marcoInicialEm: new Date() } })
       }
