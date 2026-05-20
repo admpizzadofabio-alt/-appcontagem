@@ -56,6 +56,18 @@ export async function criar(data: CriarData) {
     if (jaExiste > 0) throw new BusinessRuleError(`Produto já possui carga inicial registrada para ${local}.`)
   }
 
+  // Bloqueia saídas/perdas/transferências para produtos sem carga inicial.
+  // Sem marcoInicialEm o produto não está sendo controlado — qualquer saída
+  // produz estoque negativo "fantasma" e quebra a continuidade contábil.
+  // Entrada e CargaInicial passam (são necessárias para iniciar o controle).
+  const tiposBloqueadosSemCarga = ['Saida', 'AjustePerda', 'Transferencia']
+  if (tiposBloqueadosSemCarga.includes(data.tipoMov) && !produto.marcoInicialEm) {
+    throw new BusinessRuleError(
+      `Produto "${produto.nomeBebida}" ainda não tem Carga Inicial. ` +
+      `Admin/Supervisor precisa registrar a carga antes de qualquer ${data.tipoMov === 'Transferencia' ? 'transferência' : 'saída/perda'}.`
+    )
+  }
+
   // Operador só pode operar no próprio setor (Admin/Supervisor liberados)
   if (data.tipoMov === 'Transferencia') {
     // Em transferência: origem deve ser o setor do operador

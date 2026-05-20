@@ -32,6 +32,15 @@ export async function registrarCorrecao(data: {
   ])
   if (!prodC || !prodS) throw new AppError('Produto não encontrado', 404)
 
+  // Ambos os produtos precisam ter carga inicial — erro de comanda gera Saida no servido
+  // e referência ao comandado (que também é "rastreado" no controle de estoque).
+  if (!prodC.marcoInicialEm) {
+    throw new AppError(`Produto comandado "${prodC.nomeBebida}" não tem Carga Inicial. Admin precisa registrar antes.`, 400)
+  }
+  if (!prodS.marcoInicialEm) {
+    throw new AppError(`Produto servido "${prodS.nomeBebida}" não tem Carga Inicial. Admin precisa registrar antes.`, 400)
+  }
+
   const diaOperacional = getDiaOperacional()
 
   const operador = await prisma.usuario.findUnique({ where: { id: data.operadorId }, select: { nome: true } })

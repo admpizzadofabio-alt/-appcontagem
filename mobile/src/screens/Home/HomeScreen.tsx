@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSummaryEstoqueQuery } from '../../services/api/estoque'
 import { useListarPendentesQuery, useListarTransferenciasPendentesQuery } from '../../services/api/movimentacoes'
-import { useTurnoAtualQuery } from '../../services/api/turnos'
+import { useTurnoAtualQuery, useRevisoesPendentesQuery } from '../../services/api/turnos'
 import { StatCard } from '../../components/StatCard'
 import { Card } from '../../components/Card'
 import { SectionHeader } from '../../components/SectionHeader'
@@ -44,6 +44,7 @@ export function HomeScreen() {
 
   const [pendentesVistos, setPendentesVistos] = useState<Set<string>>(new Set())
   const pendentesNovos = isAdmin ? (pendentes ?? []).filter((p) => !pendentesVistos.has(p.id)) : []
+  const { data: revisoesPendentes = [] } = useRevisoesPendentesQuery(undefined, { skip: !isSup })
 
   function irParaAprovacoes() {
     setPendentesVistos(new Set((pendentes ?? []).map((p) => p.id)))
@@ -203,6 +204,20 @@ export function HomeScreen() {
                 {pendentesNovos.length} aprovação{pendentesNovos.length !== 1 ? 'ões' : ''} pendente{pendentesNovos.length !== 1 ? 's' : ''}
               </Text>
               <Text style={s.alertaRevisaoSub}>Entradas e perdas aguardando revisão · Toque para ver</Text>
+            </View>
+            <Text style={s.alertaRevisaoArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Alerta de revisões de contagem — Admin/Supervisor */}
+        {isSup && revisoesPendentes.length > 0 && (
+          <TouchableOpacity style={s.alertaRevisaoCard} onPress={() => nav.navigate('Admin')} activeOpacity={0.85}>
+            <Text style={s.alertaRevisaoIcon}>📋</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.alertaRevisaoTitle}>
+                {revisoesPendentes.length} revisão{revisoesPendentes.length !== 1 ? 'ões' : ''} de contagem pendente{revisoesPendentes.length !== 1 ? 's' : ''}
+              </Text>
+              <Text style={s.alertaRevisaoSub}>Divergências aguardando sua decisão · Toque para ver</Text>
             </View>
             <Text style={s.alertaRevisaoArrow}>›</Text>
           </TouchableOpacity>

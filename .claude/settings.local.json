@@ -16,7 +16,12 @@
       "Bash(grep -E \"POSTGRES|PGADMIN\" .env.example)",
       "Bash(ls backend/.env*)",
       "Bash(grep -l \"DATABASE_URL\" backend/.env*)",
-      "Bash(rtk npm *)"
+      "Bash(rtk npm *)",
+      "Bash(npx eas *)",
+      "Bash(EXPO_TOKEN=UlYaMxfxzCU5UnZSAmukMODKIBhKgXq0ynKvp35P npx eas whoami)",
+      "Bash(EXPO_TOKEN=UlYaMxfxzCU5UnZSAmukMODKIBhKgXq0ynKvp35P npx eas build --platform android --profile production --non-interactive --no-wait)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://contagem.sistemaspizzafabio.com.br/api/v1/health)",
+      "Bash(curl -s https://contagem.sistemaspizzafabio.com.br/api/v1/health)"
     ],
     "additionalDirectories": [
       "c:\\Users\\CLIENTE\\.claude\\projects\\c--Users-CLIENTE-Documents-APPCONTAGEM\\memory"
