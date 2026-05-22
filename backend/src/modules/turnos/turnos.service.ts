@@ -1,3 +1,4 @@
+import type { ItemContagem, MovimentacaoEstoque } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 import { AppError, NotFoundError, BusinessRuleError, ForbiddenError } from '../../shared/errors.js'
 import { getDiaOperacional, categorizarDivergencia } from '../../shared/diaOperacional.js'
@@ -46,8 +47,8 @@ export async function deletarTurno(
   }
 
   await prisma.$transaction(async (tx) => {
-    let movsColibri: { id: string }[] = []
-    let itensRevisados: { id: string }[] = []
+    let movsColibri: MovimentacaoEstoque[] = []
+    let itensRevisados: ItemContagem[] = []
     if (turno.contagemId) {
       // Rollback completo (modo teste): reverte estoque, apaga movimento de ajuste e marco
       const itens = await tx.itemContagem.findMany({

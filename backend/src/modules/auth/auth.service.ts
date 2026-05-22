@@ -25,7 +25,7 @@ async function getDummyHash(): Promise<string> {
   return dummyHashCache
 }
 
-export async function login(pin: string, totpCode?: string) {
+export async function login(pin: string, totpCode?: string, ip?: string) {
   const MAX_TOTP_ATTEMPTS = 5
   const LOCKOUT_MINUTES = 15
 
@@ -40,7 +40,20 @@ export async function login(pin: string, totpCode?: string) {
   for (const u of usuarios) {
     if (await argon2.verify(u.pin, pin)) { usuario = u; break }
   }
-  if (!usuario) throw new UnauthorizedError('PIN inválido')
+  if (!usuario) {
+    await prisma.logAuditoria.create({
+      data: {
+        usuarioId: 'system',
+        usuarioNome: 'SISTEMA',
+        setor: 'AUTH',
+        acao: 'LOGIN_FALHA',
+        entidade: 'USUARIO',
+        idReferencia: 'unknown',
+        detalhes: `PIN inválido. IP: ${ip ?? 'desconhecido'}`,
+      },
+    })
+    throw new UnauthorizedError('PIN inválido')
+  }
 
   // Verifica bloqueio (gerado por tentativas 2FA repetidas)
   if (usuario.bloqueadoAte && usuario.bloqueadoAte > new Date()) {
@@ -60,6 +73,17 @@ export async function login(pin: string, totpCode?: string) {
         data: {
           loginAttempts: novasTentativas,
           ...(bloquear && { bloqueadoAte: new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) }),
+        },
+      })
+      await prisma.logAuditoria.create({
+        data: {
+          usuarioId: usuario.id,
+          usuarioNome: usuario.nome,
+          setor: usuario.setor,
+          acao: 'TOTP_FALHA',
+          entidade: 'USUARIO',
+          idReferencia: usuario.id,
+          detalhes: `Código 2FA inválido. Tentativa ${novasTentativas}/${MAX_TOTP_ATTEMPTS}. IP: ${ip ?? 'desconhecido'}${bloquear ? '. Conta bloqueada.' : ''}`,
         },
       })
       throw new UnauthorizedError(

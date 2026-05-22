@@ -38,7 +38,12 @@ const globalLimiter = rateLimit({
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas requisições. Tente em 15 minutos.' },
 })
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-origin' } }))
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+  referrerPolicy: { policy: 'no-referrer' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  contentSecurityPolicy: false, // API JSON pura — CSP não se aplica
+}))
 const corsOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim())
 app.use(cors({ origin: corsOrigins, credentials: true }))
 app.use(compression() as any)

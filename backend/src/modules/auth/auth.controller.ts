@@ -5,7 +5,7 @@ import * as service from './auth.service.js'
 export async function loginHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { pin, totpCode } = loginSchema.parse(req.body)
-    const result = await service.login(pin, totpCode)
+    const result = await service.login(pin, totpCode, req.ip)
     res.status(200).json(result)
   } catch (err) { next(err) }
 }
