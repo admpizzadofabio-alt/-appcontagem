@@ -22,6 +22,7 @@ import { colibriRouter } from './modules/colibri/colibri.routes.js'
 import { turnosRouter } from './modules/turnos/turnos.routes.js'
 import { correcoesRouter } from './modules/correcoes/correcoes.routes.js'
 import { meuTurnoRouter } from './modules/meuTurno/meuTurno.routes.js'
+import { setoresRouter } from './modules/setores/setores.routes.js'
 import { prisma } from './config/prisma.js'
 
 const app = express()
@@ -115,6 +116,7 @@ app.use(`${prefix}/colibri`, colibriRouter)
 app.use(`${prefix}/turnos`, turnosRouter)
 app.use(`${prefix}/correcoes`, correcoesRouter)
 app.use(`${prefix}/meu-turno`, meuTurnoRouter)
+app.use(`${prefix}/setores`, setoresRouter)
 
 app.use(errorHandler)
 
