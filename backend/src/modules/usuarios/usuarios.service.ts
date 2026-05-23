@@ -21,6 +21,7 @@ export async function atualizar(id: string, data: { nome?: string; pin?: string;
   if (data.pin) {
     update.pin = await argon2.hash(data.pin, ARGON2_OPTIONS)
     update.pinFormat = 'argon2id'
+    update.tokenVersion = { increment: 1 } // invalida sessões ativas ao trocar PIN
   }
   return prisma.usuario.update({ where: { id }, data: update, select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true } })
 }

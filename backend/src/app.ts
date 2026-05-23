@@ -8,6 +8,7 @@ import { env } from './config/env.js'
 import { logger } from './config/logger.js'
 import { swaggerMiddleware, swaggerSetup } from './config/swagger.js'
 import { requireAuth, requireNivel } from './middlewares/auth.js'
+import { checkAppVersion } from './middlewares/appVersion.js'
 import { errorHandler } from './middlewares/error-handler.js'
 import { authRouter } from './modules/auth/auth.routes.js'
 import { usuariosRouter } from './modules/usuarios/usuarios.routes.js'
@@ -67,6 +68,7 @@ app.use((pinoHttp as any)({
   },
 }))
 app.use(globalLimiter)
+app.use(checkAppVersion)
 
 app.use('/uploads', requireAuth, express.static('uploads'))
 

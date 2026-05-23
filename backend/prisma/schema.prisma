@@ -67,6 +67,8 @@ model Usuario {
   // 2FA opcional (TOTP RFC 6238). Quando totpSecret != null, login exige código.
   totpSecret     String?
   totpEnabled    Boolean     @default(false)
+  // Incrementar para invalidar todos os access tokens ativos do usuário imediatamente.
+  tokenVersion   Int         @default(0)
 
   movimentacoes    MovimentacaoEstoque[]
   contagens        ContagemEstoque[]

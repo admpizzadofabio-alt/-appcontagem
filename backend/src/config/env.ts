@@ -24,6 +24,8 @@ const envSchema = z.object({
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
   // Alerta Colibri: webhook (Discord/Slack/Telegram) acionado quando Colibri offline >2h
   ALERTA_WEBHOOK_URL: z.string().default(''),
+  // Versão mínima do app mobile aceita. Deixe vazio para desativar.
+  APP_MIN_VERSION: z.string().default(''),
 })
 
 export const env = envSchema.parse(process.env)

@@ -6,8 +6,8 @@ import { env } from '../../config/env.js'
 import { UnauthorizedError } from '../../shared/errors.js'
 import { verifyTotp } from './totp.service.js'
 
-function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso: string) {
-  const payload = { sub: usuarioId, nome, setor, nivelAcesso }
+function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso: string, tokenVersion: number) {
+  const payload = { sub: usuarioId, nome, setor, nivelAcesso, tokenVersion }
   const accessToken = jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as any })
   const refreshToken = jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN as any })
   return { accessToken, refreshToken }
@@ -102,7 +102,7 @@ export async function login(pin: string, totpCode?: string, ip?: string) {
     })
   }
 
-  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso)
+  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso, usuario.tokenVersion)
 
   const tokenHash = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex')
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -139,7 +139,7 @@ export async function refresh(refreshToken: string) {
 
   await prisma.refreshToken.delete({ where: { tokenHash } })
 
-  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso)
+  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso, usuario.tokenVersion)
   const newHash = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex')
   await prisma.refreshToken.create({
     data: { tokenHash: newHash, usuarioId: usuario.id, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
@@ -149,7 +149,10 @@ export async function refresh(refreshToken: string) {
 }
 
 export async function logout(usuarioId: string) {
-  await prisma.refreshToken.deleteMany({ where: { usuarioId } })
+  await prisma.$transaction([
+    prisma.refreshToken.deleteMany({ where: { usuarioId } }),
+    prisma.usuario.update({ where: { id: usuarioId }, data: { tokenVersion: { increment: 1 } } }),
+  ])
   await prisma.logAuditoria.create({
     data: {
       usuarioId,
