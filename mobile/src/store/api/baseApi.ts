@@ -29,6 +29,6 @@ export const baseApi = createApi({
   refetchOnFocus: true,
   refetchOnMountOrArgChange: true,
   refetchOnReconnect: true,
-  tagTypes: ['Estoque', 'Movimentacoes', 'Contagem', 'Pedidos', 'Produtos', 'Usuarios', 'Relatorios', 'ColibriMapeamentos', 'ColibriCatalogo', 'ColibriUltimaImportacao', 'Turno', 'Rascunhos', 'Correcoes', 'Revisoes'],
+  tagTypes: ['Estoque', 'Movimentacoes', 'Contagem', 'Pedidos', 'Produtos', 'Usuarios', 'Relatorios', 'ColibriMapeamentos', 'ColibriCatalogo', 'ColibriUltimaImportacao', 'Turno', 'Rascunhos', 'Correcoes', 'Revisoes', 'Setores'],
   endpoints: () => ({}),
 })

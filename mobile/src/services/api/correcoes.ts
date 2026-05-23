@@ -1,4 +1,4 @@
-import { baseApi } from '../../store/api/baseApi'
+﻿import { baseApi } from '../../store/api/baseApi'
 
 export type CorrecaoVenda = {
   id: string
@@ -17,7 +17,7 @@ export type CorrecaoVenda = {
 export const correcoesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     registrarCorrecao: build.mutation<CorrecaoVenda, {
-      local: 'Bar' | 'Delivery' | 'Vinhos'
+      local: string
       turnoId?: string | null
       produtoComandadoId: string
       produtoServidoId: string

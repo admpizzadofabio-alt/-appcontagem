@@ -13,6 +13,7 @@ import {
   useCriarMovimentacaoMutation,
   type Movimentacao,
 } from '../../services/api/movimentacoes'
+import { useListarSetoresQuery } from '../../services/api/setores'
 import {
   useRascunhosPendentesQuery,
   useDecidirRascunhoMutation,
@@ -565,7 +566,9 @@ type GrupoProduto = {
 }
 
 function AbaMovimentosContent() {
-  const [localFiltro, setLocalFiltro] = useState<'Bar' | 'Delivery' | 'Vinhos' | undefined>(undefined)
+  const { data: setoresList = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const locaisComEstoque = setoresList.filter((s) => s.temEstoque).map((s) => s.nome)
+  const [localFiltro, setLocalFiltro] = useState<string | undefined>(undefined)
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>('todos')
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('todos')
   const [vista, setVista] = useState<VistaFiltro>('produto')
@@ -673,7 +676,7 @@ function AbaMovimentosContent() {
         produtoId: corrModal.produtoId,
         tipoMov: diff > 0 ? 'Entrada' : 'Saida',
         quantidade: Math.abs(diff),
-        localOrigem: corrModal.localOrigem ?? corrModal.localDestino ?? 'Bar',
+        localOrigem: corrModal.localOrigem ?? corrModal.localDestino ?? locaisComEstoque[0] ?? 'Bar',
         imagemComprovante: fotoNota,
         observacao: `Correção de entrada - nota fiscal. Registrado: ${corrModal.quantidade}, correto: ${correta} ${corrModal.produto.unidadeMedida}`,
       }).unwrap()
@@ -836,7 +839,7 @@ function AbaMovimentosContent() {
         {/* Local + Vista */}
         <View style={s.movControles}>
           <View style={[s.localRow, { flex: 1 }]}>
-            {([undefined, 'Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
+            {([undefined, ...locaisComEstoque]).map((l) => (
               <TouchableOpacity key={l ?? 'todos'} style={[s.localBtn, localFiltro === l && s.localBtnAtivo]} onPress={() => setLocalFiltro(l)}>
                 <Text style={[s.localBtnTxt, localFiltro === l && s.localBtnTxtAtivo]}>{l ?? 'Todos'}</Text>
               </TouchableOpacity>

@@ -1,4 +1,4 @@
-import { baseApi } from '../../store/api/baseApi'
+﻿import { baseApi } from '../../store/api/baseApi'
 
 export type ColibriMapeamento = {
   id: string
@@ -26,7 +26,7 @@ export type ColibriImportacao = {
 export type ImportarVendasInput = {
   dataInicio: string
   dataFim: string
-  local: 'Bar' | 'Delivery' | 'Vinhos'
+  local: string
 }
 
 export type ImportarVendasResult = {

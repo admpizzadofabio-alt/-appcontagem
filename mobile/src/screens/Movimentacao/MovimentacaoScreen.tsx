@@ -49,7 +49,7 @@ export function MovimentacaoScreen() {
 
   const [produtoId, setProdutoId] = useState('')
   const [quantidade, setQuantidade] = useState('')
-  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos'>(localOperador)
+  const [local, setLocal] = useState<string>(localOperador)
   const [motivo, setMotivo] = useState('')
   const [observacao, setObservacao] = useState('')
   const [busca, setBusca] = useState('')
@@ -60,7 +60,7 @@ export function MovimentacaoScreen() {
   const toast = useToast()
 
   const { data: turnoAtual } = useTurnoAtualQuery(
-    { local: local as 'Bar' | 'Delivery' | 'Vinhos' },
+    { local },
     { skip: tipo !== 'AjustePerda' },
   )
 
@@ -77,11 +77,9 @@ export function MovimentacaoScreen() {
   const produtoSelecionado = produtos.find((p) => p.id === produtoId)
 
   // setorPadrao define os locais disponíveis para o produto: 'Bar'/'Delivery' restringe, 'Todos' libera ambos
-  const locaisDoProduto: ('Bar' | 'Delivery' | 'Vinhos')[] = produtoSelecionado?.setorPadrao === 'Bar'
-    ? ['Bar']
-    : produtoSelecionado?.setorPadrao === 'Delivery'
-      ? ['Delivery']
-      : LOCAIS as ('Bar' | 'Delivery' | 'Vinhos')[]
+  const locaisDoProduto: string[] = produtoSelecionado?.setorPadrao === 'Todos'
+    ? LOCAIS
+    : produtoSelecionado?.setorPadrao ? [produtoSelecionado.setorPadrao] : LOCAIS
 
   // Se o produto restringe local e o local atual não casa, ajusta automaticamente
   React.useEffect(() => {

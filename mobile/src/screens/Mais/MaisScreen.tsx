@@ -118,6 +118,13 @@ export function MaisScreen() {
       role: 'Admin',
     },
     {
+      icon: '🏷️',
+      label: 'Setores',
+      sub: 'Criar e gerenciar setores do sistema',
+      onPress: () => navigation.navigate('Setores'),
+      role: 'Admin',
+    },
+    {
       icon: '🔐',
       label: 'Autenticação 2 Fatores',
       sub: 'Adicionar código TOTP no login',

@@ -5,6 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTurnoAtualQuery, useAbrirTurnoMutation, useFecharTurnoMutation, useDeletarTurnoMutation } from '../../services/api/turnos'
 import { useListarTransferenciasPendentesQuery, useConfirmarTransferenciaMutation, useRejeitarTransferenciaMutation } from '../../services/api/movimentacoes'
+import { useListarSetoresQuery } from '../../services/api/setores'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocalAcesso } from '../../hooks/useLocalAcesso'
 import { Card } from '../../components/Card'
@@ -19,12 +20,12 @@ export function AbrirTurnoScreen() {
   const navigation = useNavigation<Nav>()
   const route = useRoute<RouteT>()
   const { usuario } = useAuth()
-  const { veTodosLocais } = useLocalAcesso()
+  const { veTodosLocais, localOperador } = useLocalAcesso()
+  const { data: setores = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const locaisComEstoque = setores.filter((s) => s.temEstoque).map((s) => s.nome)
 
-  const setorUsuario = usuario?.setor
-  const localInicial: 'Bar' | 'Delivery' | 'Vinhos' = route.params?.local
-    ?? (setorUsuario === 'Delivery' ? 'Delivery' : setorUsuario === 'Vinhos' ? 'Vinhos' : 'Bar')
-  const [local, setLocal] = useState<'Bar' | 'Delivery' | 'Vinhos'>(localInicial)
+  const localInicial: string = route.params?.local ?? localOperador
+  const [local, setLocal] = useState<string>(localInicial)
 
   const { data: turnoAtual, isLoading, refetch } = useTurnoAtualQuery({ local })
   const [abrir, { isLoading: abrindo }] = useAbrirTurnoMutation()
@@ -157,7 +158,7 @@ export function AbrirTurnoScreen() {
 
         {veTodosLocais ? (
           <View style={s.localRow}>
-            {(['Bar', 'Delivery', 'Vinhos'] as const).map((l) => (
+            {locaisComEstoque.map((l) => (
               <TouchableOpacity
                 key={l}
                 style={[s.localBtn, local === l && s.localBtnAtivo]}

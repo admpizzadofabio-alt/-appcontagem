@@ -30,6 +30,7 @@ import { ContagemTurnoScreen } from '../screens/Turno/ContagemTurnoScreen'
 import { ResumoContagemScreen } from '../screens/Turno/ResumoContagemScreen'
 import { ErroComandaScreen } from '../screens/Turno/ErroComandaScreen'
 import { MeuTurnoScreen } from '../screens/MeuTurno/MeuTurnoScreen'
+import { SetoresScreen } from '../screens/Admin/SetoresScreen'
 
 import type { AuthStackParams, AppStackParams, TabParams } from './types'
 
@@ -99,6 +100,7 @@ function AppNavigator() {
       <AppStack.Screen name="ResumoContagem" component={ResumoContagemScreen} options={{ title: 'Resumo da Contagem' }} />
       <AppStack.Screen name="ErroComanda" component={ErroComandaScreen} options={{ title: 'Erro de Comanda' }} />
       <AppStack.Screen name="MeuTurno" component={MeuTurnoScreen} options={{ title: 'Meu Turno' }} />
+      <AppStack.Screen name="Setores" component={SetoresScreen} options={{ title: 'Gerenciar Setores' }} />
     </AppStack.Navigator>
   )
 }

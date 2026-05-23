@@ -13,13 +13,12 @@ import { SectionHeader } from '../../components/SectionHeader'
 import { BotaoColibriCarregar } from '../../components/BotaoColibriCarregar'
 import { useColibriNovosQuery } from '../../services/api/colibri'
 import { useListarProdutosQuery } from '../../services/api/produtos'
-import { useLocalAcesso, type Local } from '../../hooks/useLocalAcesso'
+import { useLocalAcesso } from '../../hooks/useLocalAcesso'
+import { useListarSetoresQuery } from '../../services/api/setores'
 import { colors } from '../../theme/colors'
 import type { AppStackParams } from '../../navigation/types'
 
 type Nav = NativeStackNavigationProp<AppStackParams>
-
-const TODOS_LOCAIS: Local[] = ['Bar', 'Delivery', 'Vinhos']
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>()
@@ -30,6 +29,9 @@ export function HomeScreen() {
   const isAdmin = usuario?.nivelAcesso === 'Admin'
   const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
   const { localOperador } = useLocalAcesso()
+  const { data: setoresList = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const locaisComEstoque = setoresList.filter((s) => s.temEstoque).map((s) => s.nome)
+  const outrosLocais = isAdmin ? locaisComEstoque.filter((l) => l !== localOperador) : []
   // Polling: 15s para sincronizar turno aberto/fechado por outro dispositivo (admin/outro op)
   const { data: turnoAtual } = useTurnoAtualQuery({ local: localOperador }, { pollingInterval: 15000 })
   const { data: turnoBar } = useTurnoAtualQuery({ local: 'Bar' }, { skip: !isAdmin, pollingInterval: 15000 })
@@ -57,25 +59,22 @@ export function HomeScreen() {
   const turnosAdmin = isAdmin ? [turnoBar, turnoDelivery, turnoVinhos].filter(Boolean) : []
   const algumTurnoAberto = isAdmin ? turnosAdmin.length > 0 : turnoAberto
 
-  // Para Admin: lista os 2 outros locais (não-operador) para exibir pendências cruzadas.
-  // Para operador: array vazio (não usado).
-  const outrosLocais: Local[] = isAdmin ? TODOS_LOCAIS.filter((l) => l !== localOperador) : []
   const { data: transfPendentes = [] } = useListarTransferenciasPendentesQuery(
     { local: localOperador },
     { skip: !operacoesLiberadas },
   )
   const { data: transfPendentesOutro1 = [] } = useListarTransferenciasPendentesQuery(
-    { local: (outrosLocais[0] ?? 'Bar') as Local },
+    { local: outrosLocais[0] ?? 'Bar' },
     { skip: !isAdmin || !outrosLocais[0] },
   )
   const { data: transfPendentesOutro2 = [] } = useListarTransferenciasPendentesQuery(
-    { local: (outrosLocais[1] ?? 'Bar') as Local },
+    { local: outrosLocais[1] ?? 'Bar' },
     { skip: !isAdmin || !outrosLocais[1] },
   )
   const transfOutrosCards = [
     { local: outrosLocais[0], lista: transfPendentesOutro1 },
     { local: outrosLocais[1], lista: transfPendentesOutro2 },
-  ].filter((c): c is { local: Local; lista: typeof transfPendentesOutro1 } => !!c.local && c.lista.length > 0)
+  ].filter((c): c is { local: string; lista: typeof transfPendentesOutro1 } => !!c.local && c.lista.length > 0)
 
   function bloqueadoAlert() {
     if (!turnoAberto) {
@@ -155,7 +154,7 @@ export function HomeScreen() {
             <TouchableOpacity
               key={t!.id}
               style={[s.turnoStatusCard, tContagemOk ? s.turnoStatusOk : s.turnoStatusBloqueado]}
-              onPress={() => nav.navigate('AbrirTurno', { local: t!.local as Local })}
+              onPress={() => nav.navigate('AbrirTurno', { local: t!.local })}
               activeOpacity={0.85}
             >
               <Text style={s.turnoStatusIcon}>{tContagemOk ? '🟢' : '🟡'}</Text>
@@ -355,6 +354,7 @@ export function HomeScreen() {
               {[
                 { icon: '👥', label: 'Usuários', onPress: () => nav.navigate('Usuarios') },
                 { icon: '🍺', label: 'Produtos', onPress: () => nav.navigate('Produtos') },
+                { icon: '🏷️', label: 'Setores', onPress: () => nav.navigate('Setores') },
                 { icon: '📦', label: 'Carga Inicial de Estoque', onPress: () => nav.navigate('Movimentacao', { tipo: 'CargaInicial' }) },
               ].map((item) => (
                 <TouchableOpacity key={item.label} style={s.menuItem} onPress={item.onPress} activeOpacity={0.7}>

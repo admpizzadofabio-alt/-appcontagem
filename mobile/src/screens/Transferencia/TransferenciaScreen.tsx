@@ -4,22 +4,25 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { useListarProdutosQuery } from '../../services/api/produtos'
 import { useCriarMovimentacaoMutation } from '../../services/api/movimentacoes'
-import { useLocalAcesso, type Local } from '../../hooks/useLocalAcesso'
+import { useLocalAcesso } from '../../hooks/useLocalAcesso'
+import { useListarSetoresQuery } from '../../services/api/setores'
 import { ActionButton } from '../../components/ActionButton'
 import { Card } from '../../components/Card'
 import { colors } from '../../theme/colors'
 
 export function TransferenciaScreen() {
   const nav = useNavigation()
-  const { veTodosLocais, localOperador, localOposto } = useLocalAcesso()
+  const { veTodosLocais, localOperador } = useLocalAcesso()
+  const { data: setores = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const TODOS_LOCAIS = setores.filter((s) => s.temEstoque).map((s) => s.nome)
   const { data: produtos = [] } = useListarProdutosQuery({ ativo: true })
   const [criar, { isLoading }] = useCriarMovimentacaoMutation()
 
-  const TODOS_LOCAIS: Local[] = ['Bar', 'Delivery', 'Vinhos']
+  const localOposto = TODOS_LOCAIS.find((l) => l !== localOperador) ?? TODOS_LOCAIS[0] ?? ''
   const [produtoId, setProdutoId] = useState('')
   const [quantidade, setQuantidade] = useState('')
-  const [origem, setOrigem] = useState<Local>(localOperador)
-  const [destino, setDestino] = useState<Local>(localOposto)
+  const [origem, setOrigem] = useState<string>(localOperador)
+  const [destino, setDestino] = useState<string>(localOposto)
   const [busca, setBusca] = useState('')
 
   const filtrados = produtos.filter((p) => p.nomeBebida.toLowerCase().includes(busca.toLowerCase()))
