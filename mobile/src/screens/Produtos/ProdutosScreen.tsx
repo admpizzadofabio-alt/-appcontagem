@@ -30,16 +30,21 @@ import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
 import { colors } from '../../theme/colors'
+import { useListarSetoresQuery } from '../../services/api/setores'
 
 const CATEGORIAS = ['Cerveja', 'Refrigerante', 'Água', 'Suco', 'Vinho', 'Destilado', 'Outros']
 const UNIDADES   = ['un', 'L', 'ml', 'cx', 'fardo']
-const SETORES    = ['Bar', 'Delivery', 'Vinhos', 'Todos'] as const
-const SETOR_LABEL: Record<string, string> = { Bar: '🍺 Bar', Delivery: '🛵 Delivery', Vinhos: '🍷 Vinhos', Todos: '🔄 Todos os locais' }
 
-type Setor = 'Bar' | 'Delivery' | 'Vinhos' | 'Todos'
+type Setor = string
 
 export function ProdutosScreen() {
   const { data: produtos = [], isLoading } = useListarProdutosQuery()
+  const { data: setoresData = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const SETORES = [...setoresData.map((s) => s.nome), 'Todos']
+  const SETOR_LABEL: Record<string, string> = Object.fromEntries([
+    ...setoresData.map((s) => [s.nome, s.nome]),
+    ['Todos', '🔄 Todos os locais'],
+  ])
   const [criar,    { isLoading: criando }]  = useCriarProdutoMutation()
   const [atualizar, { isLoading: salvando }] = useAtualizarProdutoMutation()
   const [deletar]  = useDeletarProdutoMutation()

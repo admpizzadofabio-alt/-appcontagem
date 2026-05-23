@@ -8,12 +8,14 @@ import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
 import { EmptyState } from '../../components/EmptyState'
 import { colors } from '../../theme/colors'
+import { useListarSetoresQuery } from '../../services/api/setores'
 
-const SETORES = ['Bar', 'Delivery', 'Vinhos', 'Admin', 'Todos']
 const NIVEIS = ['Operador', 'Supervisor', 'Admin']
 
 export function UsuariosScreen() {
   const { data: usuarios = [], isLoading } = useListarUsuariosQuery()
+  const { data: setoresData = [] } = useListarSetoresQuery({ apenasAtivos: true })
+  const SETORES = [...setoresData.map((s) => s.nome), 'Admin', 'Todos']
   const [criar, { isLoading: criando }] = useCriarUsuarioMutation()
   const [atualizar, { isLoading: atualizando }] = useAtualizarUsuarioMutation()
   const [toggle] = useToggleUsuarioMutation()

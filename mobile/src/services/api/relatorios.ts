@@ -18,8 +18,19 @@ export type DivergenciaRelatorio = {
   itens: Array<{
     diferenca: number
     causaDivergencia?: string
+    fotoEvidencia?: string
     produto: { nomeBebida: string; unidadeMedida: string }
   }>
+}
+
+export type PerdaRelatorio = {
+  id: string
+  dataMov: string
+  quantidade: number
+  motivoAjuste?: string
+  imagemComprovante?: string
+  produto: { nomeBebida: string; unidadeMedida: string }
+  usuario?: { nome: string }
 }
 
 export type CmvResult = {
@@ -67,7 +78,7 @@ export const relatoriosApi = baseApi.injectEndpoints({
       query: (params) => ({ url: '/relatorios/divergencias', params: params ?? {} }),
       providesTags: ['Relatorios'],
     }),
-    perdasRelatorio: build.query<any[], { dataInicio?: string; dataFim?: string } | void>({
+    perdasRelatorio: build.query<PerdaRelatorio[], { dataInicio?: string; dataFim?: string } | void>({
       query: (params) => ({ url: '/relatorios/perdas', params: params ?? {} }),
       providesTags: ['Relatorios'],
     }),
