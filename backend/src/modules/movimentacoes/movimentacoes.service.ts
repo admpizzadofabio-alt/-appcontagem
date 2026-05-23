@@ -58,12 +58,12 @@ export async function criar(data: CriarData) {
 
   // Bloqueia Saida e AjustePerda sem turno aberto no local de origem.
   // Sem turno aberto não há operador responsável — mesmo Admin não pode registrar saída.
-  if (['Saida', 'AjustePerda'].includes(data.tipoMov)) {
-    const local = data.localOrigem ?? 'Bar'
+  if (['Saida', 'AjustePerda', 'Entrada'].includes(data.tipoMov)) {
+    const local = data.localOrigem ?? data.localDestino ?? 'Bar'
     const turnoAberto = await prisma.fechamentoTurno.findFirst({ where: { local, status: 'Aberto' } })
     if (!turnoAberto) {
       throw new BusinessRuleError(
-        `Não há turno aberto em "${local}". Abra um turno antes de registrar saída ou perda.`
+        `Não há turno aberto em "${local}". Abra um turno antes de registrar movimentações.`
       )
     }
   }
