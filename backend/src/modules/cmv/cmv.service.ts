@@ -39,7 +39,7 @@ export async function getCmvBebidas(dataInicio: Date, dataFim: Date) {
     const cat = m.produto.categoria
     const valor = m.quantidade * m.produto.custoUnitario
     const acc = get(cat)
-    if (m.tipoMov === 'Entrada') {
+    if (m.tipoMov === 'Entrada' || m.tipoMov === 'CargaInicial') {
       acc.entradasQtd   += m.quantidade
       acc.entradasValor += valor
     } else if (m.tipoMov === 'Saida') {
@@ -48,6 +48,11 @@ export async function getCmvBebidas(dataInicio: Date, dataFim: Date) {
     } else if (m.tipoMov === 'AjustePerda') {
       acc.perdasQtd   += m.quantidade
       acc.perdasValor += valor
+    } else if (m.tipoMov === 'AjusteContagem') {
+      // localDestino: contagem maior que sistema → ganho (como Entrada)
+      // localOrigem:  contagem menor que sistema → perda (como AjustePerda)
+      if (m.localDestino) { acc.entradasQtd += m.quantidade; acc.entradasValor += valor }
+      else if (m.localOrigem) { acc.perdasQtd += m.quantidade; acc.perdasValor += valor }
     }
   }
 

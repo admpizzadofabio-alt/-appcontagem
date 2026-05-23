@@ -69,12 +69,24 @@ export async function summary() {
   return { totalValor, totalItens, alertas: alertas.length, itensAlerta: alertas.map((a: Item) => ({ ...a.produto, quantidadeAtual: a.quantidadeAtual, local: a.local })) }
 }
 
-export async function ajustar(id: string, quantidade: number, usuarioId: string, setor: string, nivelAcesso: string) {
-  const registro = await prisma.estoqueAtual.findUnique({ where: { id } })
+export async function ajustar(id: string, quantidade: number, usuarioId: string, usuarioNome: string, setor: string, nivelAcesso: string) {
+  const registro = await prisma.estoqueAtual.findUnique({ where: { id }, include: { produto: { select: { nomeBebida: true } } } })
   if (!registro) throw new NotFoundError('Registro de estoque não encontrado')
   if (nivelAcesso !== 'Admin' && registro.local !== setor)
     throw new ForbiddenError(`Supervisor do setor "${setor}" não pode ajustar estoque de "${registro.local}"`)
-  return prisma.estoqueAtual.update({ where: { id }, data: { quantidadeAtual: quantidade, atualizadoPor: usuarioId } })
+  return prisma.$transaction(async (tx) => {
+    const atualizado = await tx.estoqueAtual.update({ where: { id }, data: { quantidadeAtual: quantidade, atualizadoPor: usuarioId } })
+    await tx.logAuditoria.create({
+      data: {
+        usuarioId, usuarioNome, setor,
+        acao: 'ESTOQUE_AJUSTE_DIRETO',
+        entidade: 'EstoqueAtual',
+        idReferencia: id,
+        detalhes: JSON.stringify({ produto: registro.produto?.nomeBebida, local: registro.local, quantidadeAnterior: registro.quantidadeAtual, quantidadeNova: quantidade }),
+      },
+    })
+    return atualizado
+  })
 }
 
 export async function historico(data: string, local: string) {
@@ -213,10 +225,15 @@ export async function historico(data: string, local: string) {
   }
 
   // CASO 2: sem turno ou turno sem contagem — snapshot retroativo via walk-forward
-  // Query única ordenada por data; passagem única calcula abertura (snapshot no limite do dia) e fechamento
+  // Limita inferior ao primeiro marcoInicialEm para evitar full table scan
+  const primeiroMarco = await prisma.produto.findFirst({
+    where: { marcoInicialEm: { not: null } },
+    orderBy: { marcoInicialEm: 'asc' },
+    select: { marcoInicialEm: true },
+  })
   const movsTodos = await prisma.movimentacaoEstoque.findMany({
     where: {
-      dataMov: { lte: fimDia },
+      dataMov: { gte: primeiroMarco?.marcoInicialEm ?? inicioDia, lte: fimDia },
       OR: [{ localOrigem: local }, { localDestino: local }],
       aprovacaoStatus: 'Aprovado',
     },
@@ -321,14 +338,16 @@ export async function historico(data: string, local: string) {
   }
 }
 
-// Função interna — usada por movimentações
+// Função interna — usada por movimentações (atomic, sem TOCTOU)
 export async function upsertEstoque(produtoId: string, local: string, delta: number, usuarioId: string) {
-  const existing = await prisma.estoqueAtual.findUnique({ where: { produtoId_local: { produtoId, local } } })
-  if (existing) {
-    return prisma.estoqueAtual.update({
-      where: { produtoId_local: { produtoId, local } },
-      data: { quantidadeAtual: Math.max(0, existing.quantidadeAtual + delta), atualizadoPor: usuarioId },
-    })
+  const atualizado: number = await prisma.$executeRaw`
+    UPDATE "EstoqueAtual"
+    SET "quantidadeAtual" = GREATEST(0, "quantidadeAtual" + ${delta}::numeric),
+        "atualizadoPor"   = ${usuarioId},
+        "atualizadoEm"    = NOW()
+    WHERE "produtoId" = ${produtoId} AND "local" = ${local}
+  `
+  if (atualizado === 0) {
+    return prisma.estoqueAtual.create({ data: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId } })
   }
-  return prisma.estoqueAtual.create({ data: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId } })
 }

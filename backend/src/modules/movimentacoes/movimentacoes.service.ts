@@ -242,9 +242,13 @@ export async function deletarMovimentacao(id: string, usuarioId: string, usuario
         await _upsertEstoque(tx, mov.produtoId, mov.localOrigem!, mov.quantidade, usuarioId)
         await _upsertEstoque(tx, mov.produtoId, mov.localDestino!, -mov.quantidade, usuarioId)
       } else if (mov.tipoMov === 'AjusteContagem') {
-        const local = mov.localOrigem ?? mov.localDestino ?? 'Bar'
-        const sinalAjuste = mov.localDestino ? -1 : 1 // se entrou (destino), reverte tirando
-        await _upsertEstoque(tx, mov.produtoId, local, sinalAjuste * mov.quantidade, usuarioId)
+        if (mov.localDestino) {
+          // diferenca foi positiva → produto entrou → reverter removendo
+          await _upsertEstoque(tx, mov.produtoId, mov.localDestino, -mov.quantidade, usuarioId)
+        } else if (mov.localOrigem) {
+          // diferenca foi negativa → produto saiu → reverter restaurando
+          await _upsertEstoque(tx, mov.produtoId, mov.localOrigem, mov.quantidade, usuarioId)
+        }
       }
     }
 
@@ -269,13 +273,19 @@ export async function deletarMovimentacao(id: string, usuarioId: string, usuario
 }
 
 async function _upsertEstoque(tx: any, produtoId: string, local: string, delta: number, usuarioId: string) {
-  const existing = await tx.estoqueAtual.findUnique({ where: { produtoId_local: { produtoId, local } } })
-  const novaQtd = Math.max(0, (existing?.quantidadeAtual ?? 0) + delta)
-  await tx.estoqueAtual.upsert({
-    where: { produtoId_local: { produtoId, local } },
-    create: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId },
-    update: { quantidadeAtual: novaQtd, atualizadoPor: usuarioId },
-  })
+  // UPDATE atômico evita race condition TOCTOU (lê e soma em SQL, sem read-then-write)
+  const atualizado: number = await tx.$executeRaw`
+    UPDATE "EstoqueAtual"
+    SET "quantidadeAtual" = GREATEST(0, "quantidadeAtual" + ${delta}::numeric),
+        "atualizadoPor"   = ${usuarioId},
+        "atualizadoEm"    = NOW()
+    WHERE "produtoId" = ${produtoId} AND "local" = ${local}
+  `
+  if (atualizado === 0) {
+    await tx.estoqueAtual.create({
+      data: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId },
+    })
+  }
 }
 
 export async function listar(filtros: {

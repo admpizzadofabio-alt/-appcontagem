@@ -134,7 +134,7 @@ export async function importarVendas(params: {
             dataFim: params.dataFim,
           }
         }
-        console.warn('verificarStatusPeriodo retornou 404/405 (endpoint indisponível), prosseguindo:', e?.message)
+        logger.warn({ msg: e?.message }, 'verificarStatusPeriodo retornou 404/405 (endpoint indisponível), prosseguindo')
       }
     }
 
@@ -529,26 +529,35 @@ export async function listarImportacoes() {
 export async function sincronizarCatalogo() {
   const produtos = await fetchCatalogo()
 
+  // Carrega todos os códigos existentes em batch (evita N+1)
+  const existentes = await prisma.colibriCatalogo.findMany({ select: { colibriCode: true } })
+  const existenteSet = new Set(existentes.map((c) => c.colibriCode.toLowerCase()))
+
   let novos = 0
   let atualizados = 0
+  const agora = new Date()
+  const creates: { colibriCode: string; colibriNome: string; grupo: string; ativo: boolean; visto: boolean }[] = []
+  const updates: Promise<any>[] = []
 
   for (const p of produtos) {
-    const existe = await prisma.colibriCatalogo.findUnique({ where: { colibriCode: p.codigo } })
-    if (existe) {
+    if (existenteSet.has(p.codigo.toLowerCase())) {
       // Não altera `visto` — item já foi visto pelo usuário anteriormente
-      await prisma.colibriCatalogo.update({
+      updates.push(prisma.colibriCatalogo.update({
         where: { colibriCode: p.codigo },
-        data: { colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, sincronizadoEm: new Date() },
-      })
+        data: { colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, sincronizadoEm: agora },
+      }))
       atualizados++
     } else {
       // Item novo: visto = false → aparece no badge até o usuário abrir a aba
-      await prisma.colibriCatalogo.create({
-        data: { colibriCode: p.codigo, colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, visto: false },
-      })
+      creates.push({ colibriCode: p.codigo, colibriNome: p.descricao, grupo: p.grupo, ativo: p.ativo, visto: false })
       novos++
     }
   }
+
+  await Promise.all([
+    ...updates,
+    creates.length > 0 ? prisma.colibriCatalogo.createMany({ data: creates }) : Promise.resolve(),
+  ])
 
   return { total: produtos.length, novos, atualizados, grupos: GRUPOS_BEBIDAS }
 }

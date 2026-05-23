@@ -25,6 +25,6 @@ export async function historicoHandler(req: Request, res: Response, next: NextFu
 export async function ajustarHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { quantidade } = ajustarEstoqueSchema.parse(req.body)
-    res.json(await service.ajustar(String(req.params.id), quantidade, req.user!.sub, req.user!.setor, req.user!.nivelAcesso))
+    res.json(await service.ajustar(String(req.params.id), quantidade, req.user!.sub, req.user!.nome, req.user!.setor, req.user!.nivelAcesso))
   } catch (err) { next(err) }
 }

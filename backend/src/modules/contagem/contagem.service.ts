@@ -26,14 +26,12 @@ export async function iniciar(local: string, operadorId: string, modoCego = true
   }
 
   // Para cada produto, pega a quantidade atual em estoque (0 se ainda não tiver)
-  const itensData = await Promise.all(
-    produtos.map(async (p) => {
-      const est = await prisma.estoqueAtual.findUnique({
-        where: { produtoId_local: { produtoId: p.id, local } },
-      })
-      return { produtoId: p.id, quantidadeSistema: est?.quantidadeAtual ?? 0, quantidadeContada: 0, diferenca: 0, contadoPor: operadorId }
-    })
-  )
+  const ids = produtos.map((p) => p.id)
+  const estoques = await prisma.estoqueAtual.findMany({ where: { produtoId: { in: ids }, local } })
+  const estoqueMap = new Map(estoques.map((e) => [e.produtoId, e.quantidadeAtual]))
+  const itensData = produtos.map((p) => ({
+    produtoId: p.id, quantidadeSistema: estoqueMap.get(p.id) ?? 0, quantidadeContada: 0, diferenca: 0, contadoPor: operadorId,
+  }))
 
   const contagem = await prisma.contagemEstoque.create({
     data: {
@@ -135,7 +133,10 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
           produtoId: item.produtoId,
           tipoMov: TipoMovimentacao.AjusteContagem,
           quantidade: Math.abs(item.diferenca),
-          localDestino: contagem.local,
+          // diferenca > 0: contagem maior que sistema → estoque entrou (localDestino)
+          // diferenca < 0: contagem menor que sistema → estoque saiu (localOrigem)
+          localDestino: item.diferenca > 0 ? contagem.local : undefined,
+          localOrigem: item.diferenca < 0 ? contagem.local : undefined,
           usuarioId: operadorId,
           observacao: `Ajuste de contagem — ${item.causaDivergencia ?? 'sem causa'}`,
           referenciaOrigem: contagemId,
