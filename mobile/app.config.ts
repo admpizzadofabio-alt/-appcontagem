@@ -19,10 +19,7 @@ const config: ExpoConfig = {
     url: 'https://u.expo.dev/cd39d19e-0542-4f2b-bd1f-e5908571d51c',
   },
   android: {
-    adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#1a4731',
-    },
+    icon: './assets/icon.png',
     package: 'com.pizzadofabio.bebidas',
     runtimeVersion: { policy: 'appVersion' },
   },
