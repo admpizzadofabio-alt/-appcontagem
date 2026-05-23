@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useMacroRelatorioQuery, useDivergenciasRelatorioQuery } from '../../services/api/relatorios'
+import { useMacroRelatorioQuery, useDivergenciasRelatorioQuery, usePerdasRelatorioQuery } from '../../services/api/relatorios'
 import { StatCard } from '../../components/StatCard'
 import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
@@ -62,6 +62,7 @@ export function RelatoriosScreen() {
 
   const { data: macro, isLoading } = useMacroRelatorioQuery({ dataInicio, dataFim })
   const { data: divergencias = [] }  = useDivergenciasRelatorioQuery({ dataInicio, dataFim })
+  const { data: perdas = [] }        = usePerdasRelatorioQuery({ dataInicio, dataFim })
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
@@ -137,8 +138,26 @@ export function RelatoriosScreen() {
                   {item.diferenca > 0 ? '+' : ''}{item.diferenca} {item.produto.unidadeMedida}
                 </Text>
                 {item.causaDivergencia && <Text style={s.divCausa}>↳ {item.causaDivergencia}</Text>}
+                {item.fotoEvidencia && <Image source={{ uri: item.fotoEvidencia }} style={s.fotoThumb} resizeMode="cover" />}
               </View>
             ))}
+          </Card>
+        ))}
+
+        {/* Perdas */}
+        <SectionHeader title="Perdas" />
+        {perdas.length === 0 && (
+          <EmptyState icon="✅" title="Nenhuma perda" subtitle="Sem ajustes de perda no período" />
+        )}
+        {perdas.map((p) => (
+          <Card key={p.id} style={s.perdaCard}>
+            <View style={s.perdaHeader}>
+              <Text style={s.perdaProd}>{p.produto.nomeBebida}</Text>
+              <Text style={s.perdaQtd}>-{p.quantidade} {p.produto.unidadeMedida}</Text>
+            </View>
+            <Text style={s.perdaMeta}>{p.usuario?.nome} · {new Date(p.dataMov).toLocaleDateString('pt-BR')}</Text>
+            {p.motivoAjuste && <Text style={s.perdaMotivo}>↳ {p.motivoAjuste}</Text>}
+            {p.imagemComprovante && <Image source={{ uri: p.imagemComprovante }} style={s.fotoThumb} resizeMode="cover" />}
           </Card>
         ))}
 
@@ -175,4 +194,12 @@ const s = StyleSheet.create({
   divProd:   { fontSize: 13, fontWeight: '600', color: colors.text },
   divDiff:   { fontSize: 13, fontWeight: '700', color: colors.success },
   divCausa:  { fontSize: 11, color: colors.textSub, fontStyle: 'italic' },
+
+  perdaCard:   { gap: 6, marginBottom: 0 },
+  perdaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  perdaProd:   { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
+  perdaQtd:    { fontSize: 13, fontWeight: '700', color: colors.danger },
+  perdaMeta:   { fontSize: 12, color: colors.textSub },
+  perdaMotivo: { fontSize: 11, color: colors.textSub, fontStyle: 'italic' },
+  fotoThumb:   { width: '100%', height: 140, borderRadius: 8, marginTop: 4 },
 })
