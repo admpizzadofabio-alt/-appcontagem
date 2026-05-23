@@ -56,6 +56,18 @@ export async function criar(data: CriarData) {
     if (jaExiste > 0) throw new BusinessRuleError(`Produto já possui carga inicial registrada para ${local}.`)
   }
 
+  // Bloqueia Saida e AjustePerda sem turno aberto no local de origem.
+  // Sem turno aberto não há operador responsável — mesmo Admin não pode registrar saída.
+  if (['Saida', 'AjustePerda'].includes(data.tipoMov)) {
+    const local = data.localOrigem ?? 'Bar'
+    const turnoAberto = await prisma.fechamentoTurno.findFirst({ where: { local, status: 'Aberto' } })
+    if (!turnoAberto) {
+      throw new BusinessRuleError(
+        `Não há turno aberto em "${local}". Abra um turno antes de registrar saída ou perda.`
+      )
+    }
+  }
+
   // Bloqueia saídas/perdas/transferências para produtos sem carga inicial.
   // Sem marcoInicialEm o produto não está sendo controlado — qualquer saída
   // produz estoque negativo "fantasma" e quebra a continuidade contábil.
