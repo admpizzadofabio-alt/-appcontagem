@@ -239,8 +239,9 @@ export async function deletarMovimentacao(id: string, usuarioId: string, usuario
       } else if (['Saida', 'AjustePerda'].includes(mov.tipoMov)) {
         await _upsertEstoque(tx, mov.produtoId, mov.localOrigem ?? 'Bar', mov.quantidade, usuarioId)
       } else if (mov.tipoMov === 'Transferencia') {
-        await _upsertEstoque(tx, mov.produtoId, mov.localOrigem!, mov.quantidade, usuarioId)
-        await _upsertEstoque(tx, mov.produtoId, mov.localDestino!, -mov.quantidade, usuarioId)
+        const [firstLocal, secondLocal] = [mov.localOrigem!, mov.localDestino!].sort()
+        await _upsertEstoque(tx, mov.produtoId, firstLocal, firstLocal === mov.localOrigem ? mov.quantidade : -mov.quantidade, usuarioId)
+        await _upsertEstoque(tx, mov.produtoId, secondLocal, secondLocal === mov.localOrigem ? mov.quantidade : -mov.quantidade, usuarioId)
       } else if (mov.tipoMov === 'AjusteContagem') {
         if (mov.localDestino) {
           // diferenca foi positiva → produto entrou → reverter removendo
@@ -273,19 +274,15 @@ export async function deletarMovimentacao(id: string, usuarioId: string, usuario
 }
 
 async function _upsertEstoque(tx: any, produtoId: string, local: string, delta: number, usuarioId: string) {
-  // UPDATE atômico evita race condition TOCTOU (lê e soma em SQL, sem read-then-write)
-  const atualizado: number = await tx.$executeRaw`
-    UPDATE "EstoqueAtual"
-    SET "quantidadeAtual" = GREATEST(0, "quantidadeAtual" + ${delta}::numeric),
+  // True atomic upsert — INSERT ON CONFLICT elimina race condition entre UPDATE+INSERT
+  await tx.$executeRaw`
+    INSERT INTO "EstoqueAtual" ("id", "produtoId", "local", "quantidadeAtual", "atualizadoPor", "atualizadoEm")
+    VALUES (gen_random_uuid(), ${produtoId}, ${local}, GREATEST(0, ${delta}::numeric), ${usuarioId}, NOW())
+    ON CONFLICT ("produtoId", "local") DO UPDATE
+    SET "quantidadeAtual" = GREATEST(0, "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric),
         "atualizadoPor"   = ${usuarioId},
         "atualizadoEm"    = NOW()
-    WHERE "produtoId" = ${produtoId} AND "local" = ${local}
   `
-  if (atualizado === 0) {
-    await tx.estoqueAtual.create({
-      data: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId },
-    })
-  }
 }
 
 export async function listar(filtros: {
@@ -344,8 +341,10 @@ export async function confirmarTransferencia(movId: string, confirmadorId: strin
     if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
       throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode confirmar esta transferência`)
 
-    await _upsertEstoque(tx, mov.produtoId, mov.localOrigem!, -mov.quantidade, confirmadorId)
-    await _upsertEstoque(tx, mov.produtoId, mov.localDestino!, mov.quantidade, confirmadorId)
+    // Canonical lock order prevents deadlock when two transfers cross opposite directions
+    const [firstLocal, secondLocal] = [mov.localOrigem!, mov.localDestino!].sort()
+    await _upsertEstoque(tx, mov.produtoId, firstLocal, firstLocal === mov.localOrigem ? -mov.quantidade : mov.quantidade, confirmadorId)
+    await _upsertEstoque(tx, mov.produtoId, secondLocal, secondLocal === mov.localOrigem ? -mov.quantidade : mov.quantidade, confirmadorId)
 
     await tx.logAuditoria.create({
       data: {

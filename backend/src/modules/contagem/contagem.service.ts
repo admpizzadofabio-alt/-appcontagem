@@ -121,6 +121,13 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
   const divergencias = contagem.itens.filter((i) => i.diferenca !== 0)
 
   await prisma.$transaction(async (tx) => {
+    // Atomic status flip first — prevents double-processing on concurrent calls
+    const flipCount = await tx.contagemEstoque.updateMany({
+      where: { id: contagemId, status: StatusContagem.Aberta },
+      data: { status: StatusContagem.Fechada, dataFechamento: new Date(), totalDesvios: divergencias.length },
+    })
+    if (flipCount.count === 0) throw new AppError('Contagem já foi processada', 409, 'CONTAGEM_JA_FECHADA')
+
     for (const item of divergencias) {
       await tx.estoqueAtual.upsert({
         where: { produtoId_local: { produtoId: item.produtoId, local: contagem.local } },
@@ -133,8 +140,6 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
           produtoId: item.produtoId,
           tipoMov: TipoMovimentacao.AjusteContagem,
           quantidade: Math.abs(item.diferenca),
-          // diferenca > 0: contagem maior que sistema → estoque entrou (localDestino)
-          // diferenca < 0: contagem menor que sistema → estoque saiu (localOrigem)
           localDestino: item.diferenca > 0 ? contagem.local : undefined,
           localOrigem: item.diferenca < 0 ? contagem.local : undefined,
           usuarioId: operadorId,
@@ -143,15 +148,6 @@ export async function processar(contagemId: string, operadorId: string, nivelAce
         },
       })
     }
-
-    await tx.contagemEstoque.update({
-      where: { id: contagemId },
-      data: {
-        status: StatusContagem.Fechada,
-        dataFechamento: new Date(),
-        totalDesvios: divergencias.length,
-      },
-    })
 
     await tx.logAuditoria.create({
       data: {

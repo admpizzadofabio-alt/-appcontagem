@@ -340,14 +340,12 @@ export async function historico(data: string, local: string) {
 
 // Função interna — usada por movimentações (atomic, sem TOCTOU)
 export async function upsertEstoque(produtoId: string, local: string, delta: number, usuarioId: string) {
-  const atualizado: number = await prisma.$executeRaw`
-    UPDATE "EstoqueAtual"
-    SET "quantidadeAtual" = GREATEST(0, "quantidadeAtual" + ${delta}::numeric),
+  await prisma.$executeRaw`
+    INSERT INTO "EstoqueAtual" ("id", "produtoId", "local", "quantidadeAtual", "atualizadoPor", "atualizadoEm")
+    VALUES (gen_random_uuid(), ${produtoId}, ${local}, GREATEST(0, ${delta}::numeric), ${usuarioId}, NOW())
+    ON CONFLICT ("produtoId", "local") DO UPDATE
+    SET "quantidadeAtual" = GREATEST(0, "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric),
         "atualizadoPor"   = ${usuarioId},
         "atualizadoEm"    = NOW()
-    WHERE "produtoId" = ${produtoId} AND "local" = ${local}
   `
-  if (atualizado === 0) {
-    return prisma.estoqueAtual.create({ data: { produtoId, local, quantidadeAtual: Math.max(0, delta), atualizadoPor: usuarioId } })
-  }
 }

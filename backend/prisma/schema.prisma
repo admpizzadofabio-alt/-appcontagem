@@ -88,6 +88,9 @@ model RefreshToken {
   criadoEm  DateTime @default(now())
 
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiresAt])
 }
 
 model Produto {
@@ -161,6 +164,13 @@ model MovimentacaoEstoque {
   @@index([diaOperacional])
   @@index([turnoId])
   @@index([produtoId, tipoMov, dataMov])
+  @@index([dataMov])
+  @@index([aprovacaoStatus])
+  @@index([localOrigem])
+  @@index([localDestino])
+  @@index([tipoMov, aprovacaoStatus])
+  @@index([referenciaOrigem])
+  @@index([usuarioId, dataMov])
 }
 
 model AprovacaoMovimentacao {
@@ -176,6 +186,9 @@ model AprovacaoMovimentacao {
   movimentacao   MovimentacaoEstoque @relation(fields: [movimentacaoId], references: [id], onDelete: Cascade)
   solicitante    Usuario             @relation("SolicitadoPor", fields: [solicitanteId], references: [id])
   aprovador      Usuario?            @relation("AprovadoPor", fields: [aprovadorId], references: [id])
+
+  @@index([status])
+  @@index([solicitanteId])
 }
 
 model ContagemEstoque {
@@ -200,6 +213,8 @@ model ContagemEstoque {
   rascunhos      EntradaRascunho[]
 
   @@index([diaOperacional])
+  @@index([local, status])
+  @@index([operadorId])
 }
 
 model ItemContagem {
@@ -229,6 +244,8 @@ model ItemContagem {
   produto   Produto         @relation(fields: [produtoId], references: [id])
 
   @@index([precisaRevisaoAdmin, revisaoStatus])
+  @@index([contagemId])
+  @@index([produtoId])
 }
 
 model PedidoCompra {
@@ -246,6 +263,10 @@ model PedidoCompra {
 
   produto  Produto? @relation(fields: [produtoId], references: [id])
   usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@index([status])
+  @@index([usuarioId])
+  @@index([produtoId])
 }
 
 model LogAuditoria {
@@ -372,4 +393,7 @@ model ColibriImportacao {
   totalIgnorados  Int
   status          String   @default("ok")
   erros           String?
+
+  @@index([status, importadoEm])
+  @@index([importadoEm])
 }
