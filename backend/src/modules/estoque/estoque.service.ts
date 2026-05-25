@@ -225,15 +225,16 @@ export async function historico(data: string, local: string) {
   }
 
   // CASO 2: sem turno ou turno sem contagem — snapshot retroativo via walk-forward
-  // Limita inferior ao primeiro marcoInicialEm para evitar full table scan
-  const primeiroMarco = await prisma.produto.findFirst({
-    where: { marcoInicialEm: { not: null } },
-    orderBy: { marcoInicialEm: 'asc' },
-    select: { marcoInicialEm: true },
+  // Limita inferior ao dataMov da primeira CargaInicial do local — marcoInicialEm não serve
+  // porque é avançado ao fechar turno (linha ~531 turnos.service.ts) e pode ultrapassar o dataMov real.
+  const primeiraMovCarga = await prisma.movimentacaoEstoque.findFirst({
+    where: { tipoMov: 'CargaInicial', OR: [{ localOrigem: local }, { localDestino: local }] },
+    orderBy: { dataMov: 'asc' },
+    select: { dataMov: true },
   })
   const movsTodos = await prisma.movimentacaoEstoque.findMany({
     where: {
-      dataMov: { gte: primeiroMarco?.marcoInicialEm ?? inicioDia, lte: fimDia },
+      dataMov: { gte: primeiraMovCarga?.dataMov ?? inicioDia, lte: fimDia },
       OR: [{ localOrigem: local }, { localDestino: local }],
       aprovacaoStatus: 'Aprovado',
     },
