@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useIsFocused } from '@react-navigation/native'
@@ -81,6 +81,11 @@ export function EstoqueScreen() {
   const locaisComEstoque = setores.filter((s) => s.temEstoque).map((s) => s.nome)
   const [local, setLocal] = useState<string | undefined>(veTodosLocais ? undefined : localOperador)
   const [busca, setBusca] = useState('')
+  const [buscaDebounced, setBuscaDebounced] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 300)
+    return () => clearTimeout(t)
+  }, [busca])
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
   const dias = useMemo(() => gerarUltimos7Dias(), [])
   const [dataSelecionada, setDataSelecionada] = useState<string>(dias[0])
@@ -107,13 +112,18 @@ export function EstoqueScreen() {
     { pollingInterval: isFocused ? 15000 : 0 },
   )
 
-  const filtrados = data.filter((e) =>
-    e.produto.nomeBebida.toLowerCase().includes(busca.toLowerCase())
+  const filtrados = useMemo(
+    () => data.filter((e) => e.produto.nomeBebida.toLowerCase().includes(buscaDebounced.toLowerCase())),
+    [data, buscaDebounced],
   )
-
-  // Alerta real: só conta quando o mínimo foi configurado (> 0) e a quantidade está abaixo
-  const baixo = filtrados.filter((e) => e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo)
-  const ok    = filtrados.filter((e) => !(e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo))
+  const baixo = useMemo(
+    () => filtrados.filter((e) => e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo),
+    [filtrados],
+  )
+  const ok = useMemo(
+    () => filtrados.filter((e) => !(e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo)),
+    [filtrados],
+  )
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

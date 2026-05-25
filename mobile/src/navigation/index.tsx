@@ -2,7 +2,7 @@ import React from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { Text } from 'react-native'
+import { Text, View, Pressable } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
 import { colors } from '../theme/colors'
 import { SplashScreen } from '../components/SplashScreen'
@@ -33,6 +33,36 @@ import { MeuTurnoScreen } from '../screens/MeuTurno/MeuTurnoScreen'
 import { SetoresScreen } from '../screens/Admin/SetoresScreen'
 
 import type { AuthStackParams, AppStackParams, TabParams } from './types'
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(error: Error) { console.error('[ErrorBoundary]', error.message) }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#fff' }}>
+          <Text style={{ fontSize: 48 }}>😔</Text>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginTop: 16, textAlign: 'center' }}>Algo deu errado</Text>
+          <Text style={{ fontSize: 14, color: '#666', marginTop: 8, textAlign: 'center' }}>Feche e abra o app novamente.</Text>
+          <Pressable
+            style={{ marginTop: 24, backgroundColor: '#1A5C37', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 }}
+            onPress={() => this.setState({ hasError: false })}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Tentar novamente</Text>
+          </Pressable>
+        </View>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const AuthStack = createNativeStackNavigator<AuthStackParams>()
 const AppStack = createNativeStackNavigator<AppStackParams>()
@@ -74,6 +104,7 @@ const HEADER_OPTS = {
 
 function AppNavigator() {
   return (
+    <ErrorBoundary>
     <AppStack.Navigator screenOptions={HEADER_OPTS}>
       <AppStack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
       <AppStack.Screen name="Movimentacao" component={MovimentacaoScreen}
@@ -102,6 +133,7 @@ function AppNavigator() {
       <AppStack.Screen name="MeuTurno" component={MeuTurnoScreen} options={{ title: 'Meu Turno' }} />
       <AppStack.Screen name="Setores" component={SetoresScreen} options={{ title: 'Gerenciar Setores' }} />
     </AppStack.Navigator>
+    </ErrorBoundary>
   )
 }
 

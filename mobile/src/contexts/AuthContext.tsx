@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBiometricAvailable(bioSupported && bioEnabled === 'true')
         if (token && userStr) {
           // Mostra app imediatamente com cache (sem bloquear no HTTP)
-          setUsuario(JSON.parse(userStr))
+          try { setUsuario(JSON.parse(userStr)) } catch { await storage.delete(KEYS.USUARIO) }
           // Valida sessão em background: atualiza papel ou desloga se token inválido
           api.get('/auth/me').then(async ({ data }) => {
             const freshUser: Usuario = { id: data.sub, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso }

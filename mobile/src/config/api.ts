@@ -38,10 +38,19 @@ api.interceptors.response.use(
     }
 
     isRefreshing = true
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
     try {
       const refreshToken = await storage.get(KEYS.REFRESH_TOKEN)
       if (!refreshToken) throw new Error('Sem refresh token')
+      // Timeout: se refresh demorar >10s rejeita fila — evita hang infinito em rede lenta
+      timeoutId = setTimeout(() => {
+        const err = new Error('Refresh token timeout')
+        queue.forEach((p) => p.reject(err))
+        queue = []
+        isRefreshing = false
+      }, 10000)
       const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken })
+      clearTimeout(timeoutId)
       await storage.set(KEYS.ACCESS_TOKEN, data.accessToken)
       await storage.set(KEYS.REFRESH_TOKEN, data.refreshToken)
       queue.forEach((p) => p.resolve(data.accessToken))
@@ -49,6 +58,7 @@ api.interceptors.response.use(
       original.headers.Authorization = `Bearer ${data.accessToken}`
       return api(original)
     } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId)
       queue.forEach((p) => p.reject(err))
       queue = []
       await storage.delete(KEYS.ACCESS_TOKEN)

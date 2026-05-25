@@ -98,7 +98,12 @@ export function MovimentacaoScreen() {
     if (!perm.granted) { Alert.alert('Permissão negada', 'Permita o uso da câmera nas configurações'); return }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true })
     if (!result.canceled && result.assets[0]?.base64) {
-      setFotoPerda(`data:image/jpeg;base64,${result.assets[0].base64}`)
+      const b64 = result.assets[0].base64
+      if (b64.length * 0.75 > 3 * 1024 * 1024) {
+        toast.error('Foto muito grande (máx 3MB). Tente novamente.')
+        return
+      }
+      setFotoPerda(`data:image/jpeg;base64,${b64}`)
     }
   }
 
