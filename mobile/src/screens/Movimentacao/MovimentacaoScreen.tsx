@@ -158,7 +158,7 @@ export function MovimentacaoScreen() {
   async function handleSubmit() {
     if (!produtoId) return toast.warning('Selecione um produto')
     const qtd = parseFloat(quantidade)
-    if (!qtd || qtd <= 0) return toast.warning('Informe a quantidade')
+    if (isNaN(qtd) || qtd < 0 || (qtd === 0 && tipo !== 'CargaInicial')) return toast.warning('Informe a quantidade')
     if (tipo === 'AjustePerda' && !motivo) return toast.warning('Informe o motivo da perda')
     if (tipo === 'AjustePerda' && !fotoPerda) return toast.warning('Foto da perda é obrigatória')
 

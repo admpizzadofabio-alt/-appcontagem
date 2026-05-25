@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const criarMovimentacaoSchema = z.object({
   produtoId: z.string().uuid('ID do produto inválido'),
   tipoMov: z.enum(['Entrada', 'Saida', 'Transferencia', 'AjustePerda', 'AjusteContagem', 'CargaInicial']),
-  quantidade: z.coerce.number().positive('Quantidade deve ser positiva').max(999999),
+  quantidade: z.coerce.number().min(0).max(999999),
   localOrigem: z.enum(['Bar', 'Delivery', 'Vinhos']).optional(),
   localDestino: z.enum(['Bar', 'Delivery', 'Vinhos']).optional(),
   observacao: z.string().max(500).optional(),
@@ -12,6 +12,10 @@ export const criarMovimentacaoSchema = z.object({
   pendente: z.boolean().optional(),
   justificativaEntrada: z.string().max(500).optional(),
 }).refine((d) => {
+  if (d.tipoMov !== 'CargaInicial' && d.quantidade === 0) return false
+  return true
+}, { message: 'Quantidade deve ser positiva', path: ['quantidade'] })
+.refine((d) => {
   if (d.tipoMov === 'AjustePerda' && !d.motivoAjuste) return false
   return true
 }, { message: 'Motivo é obrigatório para ajuste de perda', path: ['motivoAjuste'] })
