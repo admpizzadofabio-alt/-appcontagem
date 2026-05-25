@@ -2,11 +2,15 @@
  * Exporta dados críticos do banco para um arquivo JSON em backups/.
  * Preserva: usuarios, produtos, estoque atual, mapeamentos Colibri, catálogo Colibri.
  * PINs dos usuários NÃO são exportados (hash irreversível; seed recria os canônicos).
+ * Se GOOGLE_SERVICE_ACCOUNT_JSON e GOOGLE_DRIVE_FOLDER_ID estiverem configurados,
+ * o backup também é enviado ao Google Drive automaticamente.
  */
 import { PrismaClient } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { Readable } from 'stream'
+import { google } from 'googleapis'
 
 const prisma = new PrismaClient()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -46,7 +50,31 @@ export async function criarBackup(): Promise<string> {
   const arquivo = path.join(BACKUP_DIR, `backup-${ts}.json`)
   fs.writeFileSync(arquivo, JSON.stringify(backup, null, 2), 'utf-8')
 
+  try {
+    await uploadarParaDrive(arquivo, path.basename(arquivo))
+    console.log('☁️  Backup enviado ao Google Drive')
+  } catch (err) {
+    console.error('⚠️  Drive upload falhou (backup local preservado):', (err as Error).message)
+  }
+
   return arquivo
+}
+
+async function uploadarParaDrive(arquivoPath: string, nomeArquivo: string): Promise<void> {
+  const credJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+  if (!credJson || !folderId) return
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(credJson),
+    scopes: ['https://www.googleapis.com/auth/drive.file'],
+  })
+  const drive = google.drive({ version: 'v3', auth })
+  const conteudo = fs.readFileSync(arquivoPath, 'utf-8')
+  await drive.files.create({
+    requestBody: { name: nomeArquivo, parents: [folderId], mimeType: 'application/json' },
+    media: { mimeType: 'application/json', body: Readable.from([conteudo]) },
+  })
 }
 
 /**
