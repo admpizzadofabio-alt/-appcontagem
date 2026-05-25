@@ -118,23 +118,24 @@ async function checarRetencaoFotos() {
   }
 }
 
-// Backup diário às 02h local Brasília — gera JSON em backups/ e rotaciona >30 dias
-let ultimoBackup: string | null = null
-async function checarBackupDiario() {
+// Backup 4x/dia às 02h, 08h, 14h, 20h — envia ao Drive e rotaciona >30 dias locais
+const HORARIOS_BACKUP = [2, 8, 14, 20]
+const ultimosBackups = new Map<number, string>() // hora → diaJaExecutado
+async function checarBackup() {
   const agora = new Date()
   const horaAtual = agora.getHours()
   const hoje = formatLocalDate(agora)
 
-  if (horaAtual !== 2) return
-  if (ultimoBackup === hoje) return
+  if (!HORARIOS_BACKUP.includes(horaAtual)) return
+  if (ultimosBackups.get(horaAtual) === hoje) return
 
   try {
     const arquivo = await criarBackup()
     const apagados = rotacionarBackups(30)
-    ultimoBackup = hoje
-    logger.info({ arquivo, apagados }, 'Backup diário criado, antigos rotacionados')
+    ultimosBackups.set(horaAtual, hoje)
+    logger.info({ arquivo, apagados, hora: horaAtual }, 'Backup criado e enviado ao Drive')
   } catch (err) {
-    logger.error({ err }, 'Erro no backup diário')
+    logger.error({ err }, 'Erro no backup agendado')
   }
 }
 
@@ -251,9 +252,9 @@ export function iniciarJobs() {
   void checarSincCatalogo()
   setInterval(checarSincCatalogo, 30 * 60 * 1000)
 
-  // Backup diário às 02h
-  void checarBackupDiario()
-  setInterval(checarBackupDiario, 30 * 60 * 1000)
+  // Backup 4x/dia: 02h, 08h, 14h, 20h
+  void checarBackup()
+  setInterval(checarBackup, 30 * 60 * 1000)
 
   // Monitor saúde Colibri: checa a cada 30min, alerta se >2h sem importar (com throttle 4h)
   void checarSaudeColibri()
