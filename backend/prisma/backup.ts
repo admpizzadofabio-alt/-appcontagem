@@ -2,14 +2,15 @@
  * Exporta dados críticos do banco para um arquivo JSON em backups/.
  * Preserva: usuarios, produtos, estoque atual, mapeamentos Colibri, catálogo Colibri.
  * PINs dos usuários NÃO são exportados (hash irreversível; seed recria os canônicos).
- * Se BACKUP_EMAIL_USER e BACKUP_EMAIL_PASS estiverem configurados,
- * o backup é enviado por e-mail automaticamente.
+ * Se GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET e GOOGLE_OAUTH_REFRESH_TOKEN
+ * estiverem configurados, o backup é enviado ao Google Drive da conta do usuário.
  */
 import { PrismaClient } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import nodemailer from 'nodemailer'
+import { Readable } from 'stream'
+import { google } from 'googleapis'
 
 const prisma = new PrismaClient()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -50,31 +51,29 @@ export async function criarBackup(): Promise<string> {
   fs.writeFileSync(arquivo, JSON.stringify(backup, null, 2), 'utf-8')
 
   try {
-    await enviarBackupPorEmail(arquivo, path.basename(arquivo))
-    console.log('📧 Backup enviado por e-mail')
+    await uploadarParaDrive(arquivo, path.basename(arquivo))
+    console.log('☁️  Backup enviado ao Google Drive')
   } catch (err) {
-    console.error('⚠️  E-mail falhou (backup local preservado):', (err as Error).message)
+    console.error('⚠️  Drive upload falhou (backup local preservado):', (err as Error).message)
   }
 
   return arquivo
 }
 
-async function enviarBackupPorEmail(arquivoPath: string, nomeArquivo: string): Promise<void> {
-  const user = process.env.BACKUP_EMAIL_USER
-  const pass = process.env.BACKUP_EMAIL_PASS
-  const dest = process.env.BACKUP_EMAIL_DEST ?? user
-  if (!user || !pass) return
+async function uploadarParaDrive(arquivoPath: string, nomeArquivo: string): Promise<void> {
+  const clientId     = process.env.GOOGLE_OAUTH_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  const folderId     = process.env.GOOGLE_DRIVE_FOLDER_ID
+  if (!clientId || !clientSecret || !refreshToken || !folderId) return
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  })
-  await transporter.sendMail({
-    from: `AppContagem Backup <${user}>`,
-    to: dest,
-    subject: `[AppContagem] Backup ${nomeArquivo}`,
-    text: 'Backup automático do sistema AppContagem em anexo.',
-    attachments: [{ filename: nomeArquivo, path: arquivoPath }],
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:8080')
+  oauth2.setCredentials({ refresh_token: refreshToken })
+  const drive = google.drive({ version: 'v3', auth: oauth2 })
+  const conteudo = fs.readFileSync(arquivoPath, 'utf-8')
+  await drive.files.create({
+    requestBody: { name: nomeArquivo, parents: [folderId], mimeType: 'application/json' },
+    media: { mimeType: 'application/json', body: Readable.from([conteudo]) },
   })
 }
 
