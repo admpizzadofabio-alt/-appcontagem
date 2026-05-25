@@ -9,6 +9,8 @@ export const api = axios.create({
 })
 
 let isRefreshing = false
+let refreshAttempts = 0
+const MAX_REFRESH_ATTEMPTS = 2
 let queue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = []
 
 api.interceptors.request.use(async (config) => {
@@ -28,6 +30,14 @@ api.interceptors.response.use(
     if (url.includes('/auth/login') || url.includes('/auth/refresh')) return Promise.reject(error)
     original._retry = true
 
+    if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+      refreshAttempts = 0
+      await storage.delete(KEYS.ACCESS_TOKEN)
+      await storage.delete(KEYS.REFRESH_TOKEN)
+      await storage.delete(KEYS.USUARIO)
+      return Promise.reject(error)
+    }
+
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         queue.push({ resolve, reject })
@@ -38,6 +48,7 @@ api.interceptors.response.use(
     }
 
     isRefreshing = true
+    refreshAttempts++
     let timeoutId: ReturnType<typeof setTimeout> | null = null
     try {
       const refreshToken = await storage.get(KEYS.REFRESH_TOKEN)
@@ -53,6 +64,7 @@ api.interceptors.response.use(
       clearTimeout(timeoutId)
       await storage.set(KEYS.ACCESS_TOKEN, data.accessToken)
       await storage.set(KEYS.REFRESH_TOKEN, data.refreshToken)
+      refreshAttempts = 0
       queue.forEach((p) => p.resolve(data.accessToken))
       queue = []
       original.headers.Authorization = `Bearer ${data.accessToken}`

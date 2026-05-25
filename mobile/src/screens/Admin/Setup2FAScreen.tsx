@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, Alert, TextInput } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Alert, TextInput, TouchableOpacity, Clipboard } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import QRCode from 'react-native-qrcode-svg'
 import { Card } from '../../components/Card'
@@ -12,6 +12,7 @@ export function Setup2FAScreen() {
   const [step, setStep] = useState<'inicio' | 'qr' | 'confirmar'>('inicio')
   const [otpauthUrl, setOtpauthUrl] = useState('')
   const [secret, setSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [code, setCode] = useState('')
   const [setup, { isLoading: l1 }] = useSetupTotpMutation()
   const [enable, { isLoading: l2 }] = useEnableTotpMutation()
@@ -19,8 +20,11 @@ export function Setup2FAScreen() {
   const loading = l1 || l2
 
   async function iniciar() {
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error('Tempo limite atingido. Verifique sua conexão.')), 20000)
+    )
     try {
-      const r = await setup().unwrap()
+      const r = await Promise.race([setup().unwrap(), timeout])
       setOtpauthUrl(r.otpauthUrl)
       setSecret(r.secret)
       setStep('qr')
@@ -94,7 +98,17 @@ export function Setup2FAScreen() {
               <QRCode value={otpauthUrl} size={200} />
             </View>
             <Text style={s.secretLabel}>Não consegue escanear? Digite manualmente:</Text>
-            <Text selectable style={s.secretText}>{secret}</Text>
+            <View style={s.secretRow}>
+              <Text style={s.secretText}>{showSecret ? secret : '••••••••••••••••'}</Text>
+              <TouchableOpacity onPress={() => setShowSecret(v => !v)} style={s.secretBtn}>
+                <Text style={s.secretBtnTxt}>{showSecret ? 'Ocultar' : 'Mostrar'}</Text>
+              </TouchableOpacity>
+              {showSecret && (
+                <TouchableOpacity onPress={() => { Clipboard.setString(secret); Alert.alert('Copiado!') }} style={s.secretBtn}>
+                  <Text style={s.secretBtnTxt}>Copiar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <View style={{ height: 12 }} />
             <ActionButton label="Próximo: confirmar código" onPress={() => setStep('confirmar')} />
           </Card>
@@ -133,6 +147,9 @@ const s = StyleSheet.create({
   txt: { fontSize: 13, color: colors.textSub, lineHeight: 18 },
   qrWrap: { alignItems: 'center', padding: 20, backgroundColor: '#fff', borderRadius: 12, marginVertical: 12 },
   secretLabel: { fontSize: 11, color: colors.textSub, marginTop: 8 },
-  secretText: { fontSize: 13, fontFamily: 'monospace', color: colors.text, marginTop: 4, padding: 8, backgroundColor: colors.surface, borderRadius: 6 },
+  secretRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  secretText: { flex: 1, fontSize: 13, fontFamily: 'monospace', color: colors.text, padding: 8, backgroundColor: colors.surface, borderRadius: 6 },
+  secretBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.primary, borderRadius: 6 },
+  secretBtnTxt: { color: '#fff', fontSize: 11, fontWeight: '700' },
   codeInput: { fontSize: 28, fontWeight: '700', textAlign: 'center', letterSpacing: 8, padding: 16, backgroundColor: colors.surface, borderRadius: 12, marginVertical: 12, color: colors.text },
 })

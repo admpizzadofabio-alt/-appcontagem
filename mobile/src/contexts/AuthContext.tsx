@@ -86,6 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.set(KEYS.USUARIO, JSON.stringify(freshUser))
       setUsuario(freshUser)
     } catch {
+      await storage.delete(KEYS.BIOMETRIC_ENABLED)
+      setBiometricAvailable(false)
       throw new Error('Não foi possível validar a sessão. Entre com seu PIN.')
     }
   }

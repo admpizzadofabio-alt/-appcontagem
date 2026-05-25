@@ -86,8 +86,8 @@ export function LoginScreen() {
         } else {
           toast.error(`Erro ${status}: ${(e?.response?.data?.message ?? '').toString().slice(0, 80)}`)
         }
-        setPin('')
       } finally {
+        setPin('')
         setLoading(false)
       }
     }
