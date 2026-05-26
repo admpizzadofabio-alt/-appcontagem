@@ -9,9 +9,28 @@ import { prisma } from '../config/prisma.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { Readable } from 'stream'
+import { google } from 'googleapis'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BACKUP_DIR = path.join(__dirname, '..', '..', '..', 'backups')
+
+async function uploadarParaDrive(arquivoPath: string, nomeArquivo: string): Promise<void> {
+  const clientId     = process.env.GOOGLE_OAUTH_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  const folderId     = process.env.GOOGLE_DRIVE_FOLDER_ID
+  if (!clientId || !clientSecret || !refreshToken || !folderId) return
+
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:8080')
+  oauth2.setCredentials({ refresh_token: refreshToken })
+  const drive = google.drive({ version: 'v3', auth: oauth2 })
+  const conteudo = fs.readFileSync(arquivoPath, 'utf-8')
+  await drive.files.create({
+    requestBody: { name: nomeArquivo, parents: [folderId], mimeType: 'application/json' },
+    media: { mimeType: 'application/json', body: Readable.from([conteudo]) },
+  })
+}
 
 export async function criarBackup(): Promise<string> {
   fs.mkdirSync(BACKUP_DIR, { recursive: true })
@@ -78,6 +97,14 @@ export async function criarBackup(): Promise<string> {
   fs.writeFileSync(arquivo, JSON.stringify(backup, null, 2), 'utf-8')
   fs.chmodSync(arquivo, 0o600)
   logger.info({ arquivo, contagens: backup.contagens }, 'Backup criado')
+
+  try {
+    await uploadarParaDrive(arquivo, path.basename(arquivo))
+    logger.info({ arquivo }, 'Backup enviado ao Google Drive')
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, 'Drive upload falhou (backup local preservado)')
+  }
+
   return arquivo
 }
 
