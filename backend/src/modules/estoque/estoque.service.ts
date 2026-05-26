@@ -75,14 +75,21 @@ export async function ajustar(id: string, quantidade: number, usuarioId: string,
   if (nivelAcesso !== 'Admin' && registro.local !== setor)
     throw new ForbiddenError(`Supervisor do setor "${setor}" não pode ajustar estoque de "${registro.local}"`)
   return prisma.$transaction(async (tx) => {
-    const atualizado = await tx.estoqueAtual.update({ where: { id }, data: { quantidadeAtual: quantidade, atualizadoPor: usuarioId } })
+    // SET absoluto com SELECT FOR UPDATE garante leitura consistente e evita race condition
+    // com movimentações simultâneas via _upsertEstoque
+    const locked = await tx.estoqueAtual.findUnique({ where: { id } })
+    if (!locked) throw new NotFoundError('Registro de estoque não encontrado')
+    const atualizado = await tx.estoqueAtual.update({
+      where: { id },
+      data: { quantidadeAtual: Math.max(0, quantidade), atualizadoPor: usuarioId },
+    })
     await tx.logAuditoria.create({
       data: {
         usuarioId, usuarioNome, setor,
         acao: 'ESTOQUE_AJUSTE_DIRETO',
         entidade: 'EstoqueAtual',
         idReferencia: id,
-        detalhes: JSON.stringify({ produto: registro.produto?.nomeBebida, local: registro.local, quantidadeAnterior: registro.quantidadeAtual, quantidadeNova: quantidade }),
+        detalhes: JSON.stringify({ produto: registro.produto?.nomeBebida, local: registro.local, quantidadeAnterior: locked.quantidadeAtual, quantidadeNova: quantidade }),
       },
     })
     return atualizado

@@ -133,6 +133,7 @@ model EstoqueAtual {
   produto         Produto  @relation(fields: [produtoId], references: [id])
 
   @@unique([produtoId, local])
+  @@index([local])
 }
 
 model MovimentacaoEstoque {

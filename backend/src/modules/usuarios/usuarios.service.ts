@@ -21,9 +21,13 @@ export async function atualizar(id: string, data: { nome?: string; pin?: string;
   if (data.pin) {
     update.pin = await argon2.hash(data.pin, ARGON2_OPTIONS)
     update.pinFormat = 'argon2id'
-    update.tokenVersion = { increment: 1 } // invalida sessões ativas ao trocar PIN
+    update.tokenVersion = { increment: 1 }
   }
-  return prisma.usuario.update({ where: { id }, data: update, select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true } })
+  return prisma.$transaction(async (tx) => {
+    // Troca de PIN invalida TODOS os refresh tokens — sessões ativas são encerradas
+    if (data.pin) await tx.refreshToken.deleteMany({ where: { usuarioId: id } })
+    return tx.usuario.update({ where: { id }, data: update, select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true } })
+  })
 }
 
 export async function toggleAtivo(id: string) {

@@ -75,7 +75,19 @@ app.use('/uploads', requireAuth, express.static('uploads'))
 const prefix = env.API_PREFIX
 
 const SERVER_START = Date.now()
+
+// Health público: só status/uptime — sem detalhes operacionais para não autenticados
 app.get(`${prefix}/health`, async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    res.status(200).json({ status: 'ok', uptime_s: Math.floor((Date.now() - SERVER_START) / 1000) })
+  } catch {
+    res.status(503).json({ status: 'error' })
+  }
+})
+
+// Health detalhado: apenas para Admin autenticado
+app.get(`${prefix}/health/details`, requireAuth, requireNivel(['Admin']), async (_req, res) => {
   const checks: Record<string, any> = { status: 'ok', timestamp: new Date(), uptime_s: Math.floor((Date.now() - SERVER_START) / 1000) }
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -103,7 +115,10 @@ app.get(`${prefix}/health`, async (_req, res) => {
   res.status(checks.status === 'ok' ? 200 : 503).json(checks)
 })
 
-app.use('/api/docs', requireAuth, requireNivel(['Admin']), swaggerMiddleware, swaggerSetup)
+// Swagger desabilitado em produção — expõe estrutura completa da API
+if (env.NODE_ENV !== 'production') {
+  app.use('/api/docs', requireAuth, requireNivel(['Admin']), swaggerMiddleware, swaggerSetup)
+}
 
 app.use(`${prefix}/auth`, authRouter)
 app.use(`${prefix}/usuarios`, usuariosRouter)

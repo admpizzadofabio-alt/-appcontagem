@@ -16,7 +16,13 @@ const BACKUP_DIR = path.join(__dirname, '..', '..', '..', 'backups')
 export async function criarBackup(): Promise<string> {
   fs.mkdirSync(BACKUP_DIR, { recursive: true })
 
-  const [usuarios, produtos, estoqueAtual, colibriProduto, colibriCatalogo] = await Promise.all([
+  // Janela de 90 dias para movimentações e logs — equilíbrio entre tamanho e rastreabilidade
+  const noventaDiasAtras = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+
+  const [
+    usuarios, produtos, estoqueAtual, colibriProduto, colibriCatalogo,
+    movimentacoes, contagens, fechamentosTurnos, logAuditoria, pedidos,
+  ] = await Promise.all([
     prisma.usuario.findMany({
       select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true, criadoEm: true },
     }),
@@ -24,24 +30,54 @@ export async function criarBackup(): Promise<string> {
     prisma.estoqueAtual.findMany(),
     prisma.colibriProduto.findMany(),
     prisma.colibriCatalogo.findMany(),
+    // Movimentações: últimos 90 dias (histórico contábil crítico)
+    prisma.movimentacaoEstoque.findMany({
+      where: { dataMov: { gte: noventaDiasAtras } },
+      orderBy: { dataMov: 'asc' },
+    }),
+    // Contagens: últimas 90 dias com itens
+    prisma.contagemEstoque.findMany({
+      where: { dataContagem: { gte: noventaDiasAtras } },
+      include: { itens: true },
+    }),
+    // Turnos: últimos 90 dias
+    prisma.fechamentoTurno.findMany({
+      where: { abertoEm: { gte: noventaDiasAtras } },
+    }),
+    // Logs de auditoria: últimos 90 dias
+    prisma.logAuditoria.findMany({
+      where: { dataEvento: { gte: noventaDiasAtras } },
+      orderBy: { dataEvento: 'asc' },
+    }),
+    // Pedidos de compra
+    prisma.pedidoCompra.findMany({
+      where: { dataPedido: { gte: noventaDiasAtras } },
+    }),
   ])
 
   const backup = {
-    versao: '1.0',
+    versao: '2.0',
     geradoEm: new Date().toISOString(),
+    janela: { inicio: noventaDiasAtras.toISOString(), fim: new Date().toISOString() },
     contagens: {
       usuarios: usuarios.length, produtos: produtos.length,
       estoqueAtual: estoqueAtual.length,
       colibriProduto: colibriProduto.length, colibriCatalogo: colibriCatalogo.length,
+      movimentacoes: movimentacoes.length, contagens: contagens.length,
+      fechamentosTurnos: fechamentosTurnos.length, logAuditoria: logAuditoria.length,
+      pedidos: pedidos.length,
     },
-    dados: { usuarios, produtos, estoqueAtual, colibriProduto, colibriCatalogo },
+    dados: {
+      usuarios, produtos, estoqueAtual, colibriProduto, colibriCatalogo,
+      movimentacoes, contagens, fechamentosTurnos, logAuditoria, pedidos,
+    },
   }
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const arquivo = path.join(BACKUP_DIR, `backup-${ts}.json`)
   fs.writeFileSync(arquivo, JSON.stringify(backup, null, 2), 'utf-8')
   fs.chmodSync(arquivo, 0o600)
-  logger.info({ arquivo }, 'Backup criado')
+  logger.info({ arquivo, contagens: backup.contagens }, 'Backup criado')
   return arquivo
 }
 

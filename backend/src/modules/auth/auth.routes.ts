@@ -7,9 +7,10 @@ import { setupTotp, enableTotp, disableTotp } from './totp.service.js'
 
 const totpCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Código TOTP deve ter 6 dígitos') })
 
+// max reduzido de 50→10: argon2id consome ~64MB RAM por verify; 50 simultâneos = risco DoS CPU
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 10,
   skip: () => process.env.NODE_ENV === 'test',
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas tentativas. Tente em 15 minutos.' },
 })
@@ -17,14 +18,10 @@ const loginLimiter = rateLimit({
 // Refresh tem janela mais ampla (uso legítimo: 1 refresh/hora por sessão).
 // 30/15min cobre múltiplos dispositivos do mesmo usuário sem afetar UX,
 // mas bloqueia atacante tentando refresh tokens vazados em loop.
+// keyGenerator intencional: usa apenas IP — userId do body não é confiável (cliente controla)
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => {
-    // Tenta usar userId do body (refresh token request); cai no IP se não disponível
-    const body = req.body as any
-    return body?.userId ?? req.ip ?? 'anon'
-  },
   skip: () => process.env.NODE_ENV === 'test',
   message: { code: 'TOO_MANY_REQUESTS', message: 'Muitas tentativas de refresh. Tente em 15 minutos.' },
 })

@@ -91,7 +91,7 @@ async function checarCronColibri() {
     const resultado = await importarPendente({
       local: 'Bar',
       usuarioId: usuarioSistema.id,
-      usuarioNome: `${usuarioSistema.nome} (cron ${String(horaAtual).padStart(2, '0')}:00)`,
+      usuarioNome: `SISTEMA/cron (${String(horaAtual).padStart(2, '0')}:00)`,
     })
 
     ultimosCronsColibri.set(horaAtual, hoje)
@@ -230,7 +230,7 @@ export function iniciarJobs() {
     }
   }
   void rodarLimpeza()
-  setInterval(rodarLimpeza, 24 * 60 * 60 * 1000)
+  setInterval(rodarLimpeza, 6 * 60 * 60 * 1000)
 
   // Fechar turnos órfãos ao iniciar
   fecharTurnosOrfaos().catch((err) => logger.error({ err }, 'Erro ao fechar órfãos'))
