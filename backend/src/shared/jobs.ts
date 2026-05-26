@@ -79,12 +79,11 @@ async function checarCronColibri() {
   try {
     // Cron usa um "operador-sistema" — Bar como local padrão
     // (mesma convenção dos demais módulos para Admin/Todos)
-    const usuarioSistema = await prisma.usuario.findFirst({
-      where: { nivelAcesso: 'Admin', ativo: true },
-      orderBy: { criadoEm: 'asc' },
-    })
+    // ID fixo criado na seed — FK válida sem poluir histórico de Admin real
+    const usuarioSistema = await prisma.usuario.findUnique({ where: { id: 'system-cron' } })
+      ?? await prisma.usuario.findFirst({ where: { nivelAcesso: 'Admin', ativo: true }, orderBy: { criadoEm: 'asc' } })
     if (!usuarioSistema) {
-      logger.warn('Cron Colibri: nenhum usuário Admin ativo encontrado, pulando')
+      logger.warn('Cron Colibri: usuário de sistema não encontrado, pulando')
       return
     }
 
@@ -98,6 +97,27 @@ async function checarCronColibri() {
     logger.info({ hora: horaAtual, resultado }, 'Cron Colibri executado')
   } catch (err) {
     logger.error({ err, hora: horaAtual }, 'Erro no cron Colibri')
+  }
+}
+
+// Rotação de LogAuditoria: apaga registros > 180 dias às 01h
+// Backup de 90 dias garante cópia antes da remoção (janela de backup < janela de retenção de log)
+let ultimaRotacaoLogs: string | null = null
+async function checarRotacaoLogs() {
+  const agora = new Date()
+  const hora = agora.getHours()
+  const hoje = formatLocalDate(agora)
+  if (hora !== 1) return
+  if (ultimaRotacaoLogs === hoje) return
+  try {
+    const corte = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+    const { count } = await prisma.logAuditoria.deleteMany({
+      where: { dataEvento: { lt: corte } },
+    })
+    ultimaRotacaoLogs = hoje
+    if (count > 0) logger.info({ count, corte }, 'LogAuditoria: registros antigos removidos')
+  } catch (err) {
+    logger.error({ err }, 'Erro na rotação de logs de auditoria')
   }
 }
 
@@ -259,6 +279,10 @@ export function iniciarJobs() {
   // Monitor saúde Colibri: checa a cada 30min, alerta se >2h sem importar (com throttle 4h)
   void checarSaudeColibri()
   setInterval(checarSaudeColibri, 30 * 60 * 1000)
+
+  // Rotação de logs: apaga LogAuditoria > 180 dias às 01h
+  void checarRotacaoLogs()
+  setInterval(checarRotacaoLogs, 30 * 60 * 1000)
 
   // Retenção de fotos: roda diariamente às 03h
   void checarRetencaoFotos()

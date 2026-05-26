@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
+import crypto from 'crypto'
 
 const ARGON2_OPTIONS = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 }
 
@@ -53,6 +54,24 @@ async function main() {
       setor: 'Delivery',
       nivelAcesso: 'Operador',
       ativo: true,
+    },
+  })
+
+  // Usuário de sistema para jobs automáticos (Colibri cron, etc.)
+  // PIN aleatório impossível de adivinhar; ativo: false = não aparece no login nem pode autenticar.
+  // ID fixo 'system-cron' é referenciado em jobs.ts para FK válida em MovimentacaoEstoque.
+  const pinSistema = await argon2.hash(crypto.randomBytes(32).toString('hex'), ARGON2_OPTIONS)
+  await prisma.usuario.upsert({
+    where: { id: 'system-cron' },
+    update: {}, // nunca sobrescreve — apenas cria se não existir
+    create: {
+      id: 'system-cron',
+      nome: 'SISTEMA (Automático)',
+      pin: pinSistema,
+      pinFormat: 'argon2id',
+      setor: 'Admin',
+      nivelAcesso: 'Admin',
+      ativo: false, // inativo: não aparece na lista, não pode fazer login
     },
   })
 
