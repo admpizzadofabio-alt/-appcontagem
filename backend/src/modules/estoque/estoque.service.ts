@@ -250,11 +250,11 @@ export async function historico(data: string, local: string) {
   }
 
   // Data de início do walk-forward: após a última contagem fechada (ou desde a CargaInicial)
-  const baselineDate = ultimaContagemFechada?.dataFechamento ?? await prisma.movimentacaoEstoque.findFirst({
+  const baselineDate: Date = (ultimaContagemFechada?.dataFechamento ?? await prisma.movimentacaoEstoque.findFirst({
     where: { tipoMov: 'CargaInicial', OR: [{ localOrigem: local }, { localDestino: local }] },
     orderBy: { dataMov: 'asc' },
     select: { dataMov: true },
-  }).then((r) => r?.dataMov ?? inicioDia)
+  }).then((r) => r?.dataMov)) ?? inicioDia
 
   const movsTodos = await prisma.movimentacaoEstoque.findMany({
     where: {
