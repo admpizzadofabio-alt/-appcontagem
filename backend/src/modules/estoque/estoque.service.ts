@@ -232,16 +232,33 @@ export async function historico(data: string, local: string) {
   }
 
   // CASO 2: sem turno ou turno sem contagem — snapshot retroativo via walk-forward
-  // Limita inferior ao dataMov da primeira CargaInicial do local — marcoInicialEm não serve
-  // porque é avançado ao fechar turno (linha ~531 turnos.service.ts) e pode ultrapassar o dataMov real.
-  const primeiraMovCarga = await prisma.movimentacaoEstoque.findFirst({
+  // Otimização de memória: usa a contagem fechada mais recente antes da data solicitada
+  // como baseline, evitando carregar toda a história desde a CargaInicial (risco de OOM).
+  // Fallback para CargaInicial se não houver contagem fechada anterior.
+  const ultimaContagemFechada = await prisma.contagemEstoque.findFirst({
+    where: { local, status: 'Fechada', dataFechamento: { lte: inicioDia } },
+    orderBy: { dataFechamento: 'desc' },
+    include: { itens: { select: { produtoId: true, quantidadeContada: true } } },
+  })
+
+  // Baseline: quantidades contadas na última contagem fechada, ou zero se nenhuma
+  const workMap = new Map<string, number>()
+  if (ultimaContagemFechada) {
+    for (const item of ultimaContagemFechada.itens) {
+      workMap.set(item.produtoId, item.quantidadeContada)
+    }
+  }
+
+  // Data de início do walk-forward: após a última contagem fechada (ou desde a CargaInicial)
+  const baselineDate = ultimaContagemFechada?.dataFechamento ?? await prisma.movimentacaoEstoque.findFirst({
     where: { tipoMov: 'CargaInicial', OR: [{ localOrigem: local }, { localDestino: local }] },
     orderBy: { dataMov: 'asc' },
     select: { dataMov: true },
-  })
+  }).then((r) => r?.dataMov ?? inicioDia)
+
   const movsTodos = await prisma.movimentacaoEstoque.findMany({
     where: {
-      dataMov: { gte: primeiraMovCarga?.dataMov ?? inicioDia, lte: fimDia },
+      dataMov: { gte: baselineDate, lte: fimDia },
       OR: [{ localOrigem: local }, { localDestino: local }],
       aprovacaoStatus: 'Aprovado',
     },
@@ -249,7 +266,6 @@ export async function historico(data: string, local: string) {
     select: { produtoId: true, tipoMov: true, quantidade: true, localOrigem: true, localDestino: true, dataMov: true, referenciaOrigem: true },
   })
 
-  const workMap = new Map<string, number>()
   const aberturaMap = new Map<string, number>()
   let aberturaSnapped = false
 
