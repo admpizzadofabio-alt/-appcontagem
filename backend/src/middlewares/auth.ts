@@ -10,6 +10,8 @@ export interface TokenPayload {
   setor: string
   nivelAcesso: string
   tokenVersion?: number
+  setoresPermitidos?: string[]
+  verHistoricoEstoque?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -52,7 +54,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 export function requireNivel(niveis: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) return next(new UnauthorizedError())
-    const ordem = { Operador: 1, Supervisor: 2, Admin: 3 }
+    const ordem = { Comprador: 0, Operador: 1, Supervisor: 2, Admin: 3 }
     const nivelUser = ordem[req.user.nivelAcesso as keyof typeof ordem] ?? 0
     const minNivel = Math.min(...niveis.map(n => ordem[n as keyof typeof ordem] ?? 0))
     if (nivelUser < minNivel) return next(new ForbiddenError())

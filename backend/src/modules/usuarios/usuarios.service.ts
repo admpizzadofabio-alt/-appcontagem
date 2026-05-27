@@ -6,18 +6,28 @@ import { NivelAcesso } from '@prisma/client'
 const ARGON2_OPTIONS = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 }
 
 export async function listar() {
-  return prisma.usuario.findMany({ select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true, criadoEm: true }, orderBy: { nome: 'asc' } })
+  return prisma.usuario.findMany({ select: { id: true, nome: true, setor: true, nivelAcesso: true, ativo: true, criadoEm: true, setoresPermitidos: true, verHistoricoEstoque: true }, orderBy: { nome: 'asc' } })
 }
 
-export async function criar(data: { nome: string; pin: string; setor: string; nivelAcesso: NivelAcesso }) {
+export async function criar(data: { nome: string; pin: string; setor: string; nivelAcesso: NivelAcesso; setoresPermitidos?: string[]; verHistoricoEstoque?: boolean }) {
   const pinHash = await argon2.hash(data.pin, ARGON2_OPTIONS)
-  return prisma.usuario.create({ data: { ...data, pin: pinHash, pinFormat: 'argon2id' } })
+  const { setoresPermitidos, verHistoricoEstoque, ...rest } = data
+  return prisma.usuario.create({
+    data: {
+      ...rest, pin: pinHash, pinFormat: 'argon2id',
+      ...(setoresPermitidos !== undefined && { setoresPermitidos: JSON.stringify(setoresPermitidos) }),
+      ...(verHistoricoEstoque !== undefined && { verHistoricoEstoque }),
+    },
+  })
 }
 
-export async function atualizar(id: string, data: { nome?: string; pin?: string; setor?: string; nivelAcesso?: string }) {
+export async function atualizar(id: string, data: { nome?: string; pin?: string; setor?: string; nivelAcesso?: string; setoresPermitidos?: string[]; verHistoricoEstoque?: boolean }) {
   const usuario = await prisma.usuario.findUnique({ where: { id } })
   if (!usuario) throw new NotFoundError('Usuário não encontrado')
-  const update: any = { ...data }
+  const { setoresPermitidos, verHistoricoEstoque, ...rest2 } = data
+  const update: any = { ...rest2 }
+  if (setoresPermitidos !== undefined) update.setoresPermitidos = JSON.stringify(setoresPermitidos)
+  if (verHistoricoEstoque !== undefined) update.verHistoricoEstoque = verHistoricoEstoque
   if (data.pin) {
     update.pin = await argon2.hash(data.pin, ARGON2_OPTIONS)
     update.pinFormat = 'argon2id'

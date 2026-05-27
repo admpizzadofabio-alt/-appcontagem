@@ -26,6 +26,6 @@ export async function logoutHandler(req: Request, res: Response, next: NextFunct
 }
 
 export function meHandler(req: Request, res: Response) {
-  const { sub, nome, setor, nivelAcesso } = req.user!
-  res.json({ id: sub, nome, setor, nivelAcesso })
+  const { sub, nome, setor, nivelAcesso, setoresPermitidos, verHistoricoEstoque } = req.user!
+  res.json({ id: sub, nome, setor, nivelAcesso, setoresPermitidos, verHistoricoEstoque })
 }

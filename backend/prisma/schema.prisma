@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum NivelAcesso {
+  Comprador
   Operador
   Supervisor
   Admin
@@ -68,7 +69,10 @@ model Usuario {
   totpSecret     String?
   totpEnabled    Boolean     @default(false)
   // Incrementar para invalidar todos os access tokens ativos do usuário imediatamente.
-  tokenVersion   Int         @default(0)
+  tokenVersion         Int         @default(0)
+  // Configurações do papel Comprador: setores visíveis (JSON string[]) e acesso ao histórico.
+  setoresPermitidos    String?
+  verHistoricoEstoque  Boolean     @default(true)
 
   movimentacoes    MovimentacaoEstoque[]
   contagens        ContagemEstoque[]

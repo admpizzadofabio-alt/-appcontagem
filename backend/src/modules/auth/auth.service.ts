@@ -6,8 +6,13 @@ import { env } from '../../config/env.js'
 import { UnauthorizedError } from '../../shared/errors.js'
 import { verifyTotp } from './totp.service.js'
 
-function buildTokens(usuarioId: string, nome: string, setor: string, nivelAcesso: string, tokenVersion: number) {
-  const payload = { sub: usuarioId, nome, setor, nivelAcesso, tokenVersion }
+function buildTokens(
+  usuarioId: string, nome: string, setor: string, nivelAcesso: string, tokenVersion: number,
+  setoresPermitidos?: string[] | null, verHistoricoEstoque?: boolean,
+) {
+  const payload: Record<string, unknown> = { sub: usuarioId, nome, setor, nivelAcesso, tokenVersion }
+  if (setoresPermitidos != null) payload.setoresPermitidos = setoresPermitidos
+  if (verHistoricoEstoque !== undefined) payload.verHistoricoEstoque = verHistoricoEstoque
   const accessToken = jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as any })
   const refreshToken = jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN as any })
   return { accessToken, refreshToken }
@@ -102,7 +107,8 @@ export async function login(pin: string, totpCode?: string, ip?: string) {
     })
   }
 
-  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso, usuario.tokenVersion)
+  const setoresParsed = usuario.setoresPermitidos ? (() => { try { return JSON.parse(usuario.setoresPermitidos!) as string[] } catch { return undefined } })() : undefined
+  const tokens = buildTokens(usuario.id, usuario.nome, usuario.setor, usuario.nivelAcesso, usuario.tokenVersion, setoresParsed, usuario.verHistoricoEstoque)
 
   const tokenHash = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex')
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -120,7 +126,14 @@ export async function login(pin: string, totpCode?: string, ip?: string) {
     },
   })
 
-  return { ...tokens, usuario: { id: usuario.id, nome: usuario.nome, setor: usuario.setor, nivelAcesso: usuario.nivelAcesso } }
+  return {
+    ...tokens,
+    usuario: {
+      id: usuario.id, nome: usuario.nome, setor: usuario.setor, nivelAcesso: usuario.nivelAcesso,
+      ...(setoresParsed != null && { setoresPermitidos: setoresParsed }),
+      verHistoricoEstoque: usuario.verHistoricoEstoque,
+    },
+  }
 }
 
 export async function refresh(refreshToken: string) {

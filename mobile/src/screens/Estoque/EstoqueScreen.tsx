@@ -70,16 +70,20 @@ export function EstoqueScreen() {
   const { veTodosLocais, localOperador } = useLocalAcesso()
   const isAdmin = usuario?.nivelAcesso === 'Admin'
   const isSup = isAdmin || usuario?.nivelAcesso === 'Supervisor'
+  const isComprador = usuario?.nivelAcesso === 'Comprador'
   const { data: turnoAtual } = useTurnoAtualQuery(
     { local: localOperador! },
-    { skip: isSup || !localOperador }
+    { skip: isSup || isComprador || !localOperador }
   )
   const contagemFinalizada = turnoAtual?.contagem?.status === 'Fechada'
-  const qtdBloqueada = !isSup && !contagemFinalizada
+  const qtdBloqueada = !isSup && !isComprador && !contagemFinalizada
 
   const { data: setores = [] } = useListarSetoresQuery({ apenasAtivos: true })
   const locaisComEstoque = setores.filter((s) => s.temEstoque).map((s) => s.nome)
-  const [local, setLocal] = useState<string | undefined>(veTodosLocais ? undefined : localOperador)
+  const locaisComprador = isComprador && usuario?.setoresPermitidos ? usuario.setoresPermitidos : null
+  const locaisVisiveis = locaisComprador ?? locaisComEstoque
+  const localInicial = isComprador ? (locaisComprador?.[0]) : veTodosLocais ? undefined : localOperador
+  const [local, setLocal] = useState<string | undefined>(localInicial)
   const [busca, setBusca] = useState('')
   const [buscaDebounced, setBuscaDebounced] = useState('')
   useEffect(() => {
@@ -91,9 +95,10 @@ export function EstoqueScreen() {
   const [dataSelecionada, setDataSelecionada] = useState<string>(dias[0])
   const isHoje = dataSelecionada === dias[0]
   const localHistorico = local ?? 'Bar'
+  const podeVerHistorico = isSup || (isComprador && usuario?.verHistoricoEstoque !== false)
   const { data: historico, isLoading: loadingHistorico } = useHistoricoEstoqueQuery(
     { data: dataSelecionada, local: localHistorico },
-    { skip: !isSup }
+    { skip: !podeVerHistorico }
   )
 
   function toggleExpand(id: string) {
@@ -103,7 +108,7 @@ export function EstoqueScreen() {
       return next
     })
   }
-  const efetivo = veTodosLocais ? local : localOperador
+  const efetivo = isComprador ? local : veTodosLocais ? local : localOperador
   const isFocused = useIsFocused()
   // Polling: enquanto tela ativa, refaz busca a cada 15s — captura mudanças por crons (Colibri) ou outros dispositivos
   // A API já aplica RBAC + filtro de setor, então respeita as regras automaticamente
@@ -132,17 +137,17 @@ export function EstoqueScreen() {
 
         <TextInput style={s.search} placeholder="Buscar produto..." placeholderTextColor={colors.textMuted} value={busca} onChangeText={setBusca} />
 
-        {veTodosLocais ? (
+        {(veTodosLocais || (isComprador && locaisVisiveis.length > 1)) ? (
           <View style={s.tabs}>
-            {([undefined, ...locaisComEstoque]).map((l) => (
-              <TouchableOpacity key={String(l)} style={[s.tab, local === l && s.tabActive]} onPress={() => setLocal(l)}>
+            {(veTodosLocais ? [undefined, ...locaisVisiveis] : locaisVisiveis).map((l) => (
+              <TouchableOpacity key={String(l)} style={[s.tab, local === l && s.tabActive]} onPress={() => setLocal(l as string | undefined)}>
                 <Text style={[s.tabText, local === l && s.tabTextActive]}>{l ?? 'Todos'}</Text>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
           <View style={s.lockBanner}>
-            <Text style={s.lockBannerTxt}>📍 Setor: {localOperador}</Text>
+            <Text style={s.lockBannerTxt}>📍 Setor: {isComprador ? (locaisVisiveis[0] ?? '—') : localOperador}</Text>
           </View>
         )}
 
@@ -169,7 +174,7 @@ export function EstoqueScreen() {
         )}
 
         {/* ── View histórica (dias passados) ──────────────── */}
-        {!isHoje && isSup && (
+        {!isHoje && podeVerHistorico && (
           <>
             {loadingHistorico && <EmptyState icon="⏳" title="Carregando histórico..." />}
             {!loadingHistorico && historico && !historico.temDados && (
@@ -252,7 +257,7 @@ export function EstoqueScreen() {
         {/* ── View de hoje ────────────────────────────────────── */}
         {isHoje && <>
         {/* Card resumo do dia (mesmo visual dos dias anteriores) */}
-        {isSup && historico?.temDados && historico.resumo && (
+        {podeVerHistorico && historico?.temDados && historico.resumo && (
           <Card style={s.resumoDia}>
             <Text style={s.resumoDiaTitulo}>📅 {new Date(historico.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} · {localHistorico}</Text>
             <View style={s.resumoDiaRow}>

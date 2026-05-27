@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Alert, TextInput, TouchableOpacity 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useListarUsuariosQuery, useCriarUsuarioMutation, useAtualizarUsuarioMutation, useToggleUsuarioMutation } from '../../services/api/usuarios'
 import type { Usuario } from '../../services/api/usuarios'
+import { Switch } from 'react-native'
 import { ActionButton } from '../../components/ActionButton'
 import { Card } from '../../components/Card'
 import { Badge } from '../../components/Badge'
@@ -10,7 +11,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { colors } from '../../theme/colors'
 import { useListarSetoresQuery } from '../../services/api/setores'
 
-const NIVEIS = ['Operador', 'Supervisor', 'Admin']
+const NIVEIS = ['Comprador', 'Operador', 'Supervisor', 'Admin']
 
 export function UsuariosScreen() {
   const { data: usuarios = [], isLoading } = useListarUsuariosQuery()
@@ -26,6 +27,8 @@ export function UsuariosScreen() {
   const [pin, setPin] = useState('')
   const [setor, setSetor] = useState('Bar')
   const [nivel, setNivel] = useState('Operador')
+  const [setoresSel, setSetoresSel] = useState<string[]>([])
+  const [verHistorico, setVerHistorico] = useState(true)
 
   // Edit state
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -33,6 +36,8 @@ export function UsuariosScreen() {
   const [editPin, setEditPin] = useState('')
   const [editSetor, setEditSetor] = useState('Bar')
   const [editNivel, setEditNivel] = useState('Operador')
+  const [editSetoresSel, setEditSetoresSel] = useState<string[]>([])
+  const [editVerHistorico, setEditVerHistorico] = useState(true)
 
   function abrirEdicao(u: Usuario) {
     setEditandoId(u.id)
@@ -40,6 +45,8 @@ export function UsuariosScreen() {
     setEditPin('')
     setEditSetor(u.setor)
     setEditNivel(u.nivelAcesso)
+    setEditSetoresSel((u as any).setoresPermitidos ? JSON.parse((u as any).setoresPermitidos) : [])
+    setEditVerHistorico((u as any).verHistoricoEstoque ?? true)
     setShowForm(false)
   }
 
@@ -50,9 +57,10 @@ export function UsuariosScreen() {
 
   async function handleCriar() {
     if (!nome.trim() || !/^\d{6}$/.test(pin)) return Alert.alert('Atenção', 'Preencha nome e PIN de 6 dígitos.')
+    if (nivel === 'Comprador' && setoresSel.length === 0) return Alert.alert('Atenção', 'Selecione ao menos um setor para o Comprador.')
     try {
-      await criar({ nome, pin, setor, nivelAcesso: nivel }).unwrap()
-      setNome(''); setPin(''); setShowForm(false)
+      await criar({ nome, pin, setor, nivelAcesso: nivel, ...(nivel === 'Comprador' && { setoresPermitidos: setoresSel, verHistoricoEstoque: verHistorico }) }).unwrap()
+      setNome(''); setPin(''); setSetoresSel([]); setVerHistorico(true); setShowForm(false)
       Alert.alert('Usuário criado!')
     } catch (e: any) { Alert.alert('Erro', e.message) }
   }
@@ -60,6 +68,7 @@ export function UsuariosScreen() {
   async function handleAtualizar() {
     if (!editNome.trim()) return Alert.alert('Atenção', 'Nome não pode ficar vazio.')
     if (editPin && !/^\d{6}$/.test(editPin)) return Alert.alert('Atenção', 'PIN deve ter exatamente 6 dígitos.')
+    if (editNivel === 'Comprador' && editSetoresSel.length === 0) return Alert.alert('Atenção', 'Selecione ao menos um setor para o Comprador.')
     try {
       await atualizar({
         id: editandoId!,
@@ -67,6 +76,7 @@ export function UsuariosScreen() {
         setor: editSetor,
         nivelAcesso: editNivel,
         ...(editPin ? { pin: editPin } : {}),
+        ...(editNivel === 'Comprador' && { setoresPermitidos: editSetoresSel, verHistoricoEstoque: editVerHistorico }),
       }).unwrap()
       cancelarEdicao()
       Alert.alert('Usuário atualizado!')
@@ -102,6 +112,27 @@ export function UsuariosScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {nivel === 'Comprador' && (
+              <>
+                <Text style={s.fieldLabel}>Setores visíveis (obrigatório)</Text>
+                <View style={s.opts}>
+                  {setoresData.filter((s_) => s_.temEstoque).map((s_) => (
+                    <TouchableOpacity
+                      key={s_.nome}
+                      style={[s.opt, setoresSel.includes(s_.nome) && s.optActive]}
+                      onPress={() => setSetoresSel((prev) => prev.includes(s_.nome) ? prev.filter((x) => x !== s_.nome) : [...prev, s_.nome])}
+                    >
+                      <Text style={[s.optText, setoresSel.includes(s_.nome) && s.optTextActive]}>{s_.nome}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Ver histórico de movimentações</Text>
+                  <Switch value={verHistorico} onValueChange={setVerHistorico} />
+                </View>
+              </>
+            )}
 
             <ActionButton label="Criar Usuário" onPress={handleCriar} loading={criando} />
           </Card>
@@ -177,6 +208,27 @@ export function UsuariosScreen() {
                     ))}
                   </View>
 
+                  {editNivel === 'Comprador' && (
+                    <>
+                      <Text style={s.fieldLabel}>Setores visíveis (obrigatório)</Text>
+                      <View style={s.opts}>
+                        {setoresData.filter((s_) => s_.temEstoque).map((s_) => (
+                          <TouchableOpacity
+                            key={s_.nome}
+                            style={[s.opt, editSetoresSel.includes(s_.nome) && s.optActive]}
+                            onPress={() => setEditSetoresSel((prev) => prev.includes(s_.nome) ? prev.filter((x) => x !== s_.nome) : [...prev, s_.nome])}
+                          >
+                            <Text style={[s.optText, editSetoresSel.includes(s_.nome) && s.optTextActive]}>{s_.nome}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <View style={s.switchRow}>
+                        <Text style={s.switchLabel}>Ver histórico de movimentações</Text>
+                        <Switch value={editVerHistorico} onValueChange={setEditVerHistorico} />
+                      </View>
+                    </>
+                  )}
+
                   <TouchableOpacity
                     style={[s.salvarBtn, atualizando && { opacity: 0.6 }]}
                     onPress={handleAtualizar}
@@ -228,4 +280,6 @@ const s = StyleSheet.create({
   editDivider: { height: 1, backgroundColor: colors.divider, marginBottom: 6 },
   salvarBtn: { backgroundColor: colors.primary, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 4 },
   salvarBtnTxt: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  switchLabel: { fontSize: 13, color: colors.text, flex: 1 },
 })

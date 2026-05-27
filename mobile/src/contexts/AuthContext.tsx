@@ -7,7 +7,9 @@ export interface Usuario {
   id: string
   nome: string
   setor: string
-  nivelAcesso: 'Operador' | 'Supervisor' | 'Admin'
+  nivelAcesso: 'Comprador' | 'Operador' | 'Supervisor' | 'Admin'
+  setoresPermitidos?: string[]
+  verHistoricoEstoque?: boolean
 }
 
 interface AuthContextData {
@@ -41,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try { setUsuario(JSON.parse(userStr)) } catch { await storage.delete(KEYS.USUARIO) }
           // Valida sessão em background: atualiza papel ou desloga se token inválido
           api.get('/auth/me').then(async ({ data }) => {
-            const freshUser: Usuario = { id: data.sub, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso }
+            const freshUser: Usuario = { id: data.id, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso, setoresPermitidos: data.setoresPermitidos, verHistoricoEstoque: data.verHistoricoEstoque }
             await storage.set(KEYS.USUARIO, JSON.stringify(freshUser))
             setUsuario(freshUser)
           }).catch(async (err: any) => {
@@ -82,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!token) throw new Error('Sessão expirada. Entre com seu PIN.')
     try {
       const { data } = await api.get('/auth/me')
-      const freshUser: Usuario = { id: data.sub, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso }
+      const freshUser: Usuario = { id: data.id, nome: data.nome, setor: data.setor, nivelAcesso: data.nivelAcesso, setoresPermitidos: data.setoresPermitidos, verHistoricoEstoque: data.verHistoricoEstoque }
       await storage.set(KEYS.USUARIO, JSON.stringify(freshUser))
       setUsuario(freshUser)
     } catch {

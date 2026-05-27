@@ -72,6 +72,22 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
   return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.4 }}>{icon}</Text>
 }
 
+function CompradoresTabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 62, paddingBottom: 8 },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSub,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+      }}
+    >
+      <Tab.Screen name="EstoqueTab" component={EstoqueScreen} options={{ title: 'Estoque', tabBarIcon: ({ focused }) => <TabIcon icon="📦" focused={focused} /> }} />
+    </Tab.Navigator>
+  )
+}
+
 function TabNavigator() {
   return (
     <Tab.Navigator
@@ -145,12 +161,26 @@ function AuthNavigator() {
   )
 }
 
+function CompradoresAppNavigator() {
+  return (
+    <ErrorBoundary>
+      <AppStack.Navigator screenOptions={HEADER_OPTS}>
+        <AppStack.Screen name="Tabs" component={CompradoresTabNavigator} options={{ headerShown: false }} />
+      </AppStack.Navigator>
+    </ErrorBoundary>
+  )
+}
+
 export function Navigation() {
   const { usuario, loading } = useAuth()
   if (loading) return <SplashScreen />
   return (
     <NavigationContainer>
-      {usuario ? <AppNavigator /> : <AuthNavigator />}
+      {!usuario
+        ? <AuthNavigator />
+        : usuario.nivelAcesso === 'Comprador'
+          ? <CompradoresAppNavigator />
+          : <AppNavigator />}
     </NavigationContainer>
   )
 }

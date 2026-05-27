@@ -7,6 +7,8 @@ export type Usuario = {
   nivelAcesso: string
   ativo: boolean
   criadoEm: string
+  setoresPermitidos?: string | null
+  verHistoricoEstoque?: boolean
 }
 
 export const usuariosApi = baseApi.injectEndpoints({
@@ -15,11 +17,11 @@ export const usuariosApi = baseApi.injectEndpoints({
       query: () => ({ url: '/usuarios' }),
       providesTags: ['Usuarios'],
     }),
-    criarUsuario: build.mutation<Usuario, { nome: string; pin: string; setor: string; nivelAcesso: string }>({
+    criarUsuario: build.mutation<Usuario, { nome: string; pin: string; setor: string; nivelAcesso: string; setoresPermitidos?: string[]; verHistoricoEstoque?: boolean }>({
       query: (data) => ({ url: '/usuarios', method: 'POST', data }),
       invalidatesTags: ['Usuarios'],
     }),
-    atualizarUsuario: build.mutation<Usuario, { id: string; nome?: string; pin?: string; setor?: string; nivelAcesso?: string }>({
+    atualizarUsuario: build.mutation<Usuario, { id: string; nome?: string; pin?: string; setor?: string; nivelAcesso?: string; setoresPermitidos?: string[]; verHistoricoEstoque?: boolean }>({
       query: ({ id, ...data }) => ({ url: `/usuarios/${id}`, method: 'PUT', data }),
       invalidatesTags: ['Usuarios'],
     }),
