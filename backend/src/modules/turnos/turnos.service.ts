@@ -844,9 +844,11 @@ export async function fecharTurno(turnoId: string, automatico = false) {
       } else if (contagem?.status === 'Aberta') {
         // VULN-006: fechamento manual bloqueia se contagem está em andamento
         if (!automatico) throw new BusinessRuleError('Há uma contagem em andamento. Finalize a contagem antes de fechar o turno.')
+        // Cron cancela a contagem em vez de forjá-la como Fechada com zeros.
+        // Cancelada nunca é usada como fonte de verdade no histórico.
         await tx.contagemEstoque.update({
           where: { id: turno.contagemId },
-          data: { status: 'Fechada', dataFechamento: new Date() },
+          data: { status: 'Cancelada', dataFechamento: new Date() },
         })
       }
     }
