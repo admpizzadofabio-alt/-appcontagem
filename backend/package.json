@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
-    "start": "tsx prisma/backup.ts && prisma db push --accept-data-loss && tsx prisma/seed-setores.ts && node dist/server.js",
+    "start": "tsx prisma/backup.ts && tsx prisma/fix-enums.ts && prisma db push --accept-data-loss && tsx prisma/seed-setores.ts && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
