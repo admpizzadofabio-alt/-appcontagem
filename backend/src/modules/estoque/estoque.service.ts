@@ -116,9 +116,12 @@ export async function historico(data: string, local: string) {
       })
     : null
 
-  // Só considera a contagem como "fonte de verdade" do histórico se foi FECHADA.
-  // Contagem Aberta/Cancelada não deve aparecer como fechamento — cai no CASO 2.
-  const contagemFechada = contagem?.status === 'Fechada' ? contagem : null
+  // Só considera a contagem como "fonte de verdade" do histórico se foi FECHADA
+  // pelo usuário (não pelo cron). Se o cron fechou o turno forçadamente
+  // (fechadoSemContagem = true), a contagem tem zeros e não reflete a realidade —
+  // cai no CASO 2 (walk-forward) que usa os movimentos reais.
+  const contagemFechada =
+    contagem?.status === 'Fechada' && !turno?.fechadoSemContagem ? contagem : null
 
   // CASO 1: turno com contagem fechada — lógica original intacta
   // Movimentos contam apenas APÓS a contagem (evita double-count com quantidadeSistema)
