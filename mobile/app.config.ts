@@ -16,7 +16,7 @@ const config: ExpoConfig = {
   },
   runtimeVersion: { policy: 'appVersion' },
   updates: {
-    url: 'https://u.expo.dev/cd39d19e-0542-4f2b-bd1f-e5908571d51c',
+    url: 'https://u.expo.dev/9de6c342-2054-4372-bca6-ae4e117e62e8',
   },
   android: {
     icon: './assets/icon.png',
@@ -30,7 +30,7 @@ const config: ExpoConfig = {
   plugins: ['expo-asset', 'expo-secure-store', 'expo-local-authentication'],
   extra: {
     eas: {
-      projectId: 'cd39d19e-0542-4f2b-bd1f-e5908571d51c',
+      projectId: '9de6c342-2054-4372-bca6-ae4e117e62e8',
     },
   },
 }
