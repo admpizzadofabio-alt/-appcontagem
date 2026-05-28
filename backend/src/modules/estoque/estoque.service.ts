@@ -125,7 +125,9 @@ export async function historico(data: string, local: string) {
   if (turno && contagemFechada) {
     const contagem = contagemFechada
     const inicioMov = contagem.dataFechamento ?? turno.abertoEm
-    const fimMov = turno.fechadoEm ?? new Date()
+    // Estende até fim do dia para capturar Colibri (dataMov = 23:59:59 BRT), que
+    // chega após o turno fechar. Usar fechadoEm excluía essas vendas do resumo.
+    const fimMov = fimDia
     const movs = await prisma.movimentacaoEstoque.findMany({
       where: {
         dataMov: { gte: inicioMov, lte: fimMov },
