@@ -96,7 +96,7 @@ export function EstoqueScreen() {
   const isHoje = dataSelecionada === dias[0]
   const localHistorico = local ?? 'Bar'
   const podeVerHistorico = isSup || (isComprador && usuario?.verHistoricoEstoque !== false)
-  const { data: historico, isLoading: loadingHistorico } = useHistoricoEstoqueQuery(
+  const { data: historico, isLoading: loadingHistorico, isError: erroHistorico } = useHistoricoEstoqueQuery(
     { data: dataSelecionada, local: localHistorico },
     { skip: !podeVerHistorico }
   )
@@ -177,10 +177,13 @@ export function EstoqueScreen() {
         {!isHoje && podeVerHistorico && (
           <>
             {loadingHistorico && <EmptyState icon="⏳" title="Carregando histórico..." />}
-            {!loadingHistorico && historico && !historico.temDados && (
+            {!loadingHistorico && erroHistorico && (
+              <EmptyState icon="📡" title="Sem conexão" subtitle="Não foi possível carregar o histórico. Verifique sua internet e tente novamente." />
+            )}
+            {!loadingHistorico && !erroHistorico && historico?.data === dataSelecionada && !historico.temDados && (
               <EmptyState icon="📭" title={`Sem atividade em ${localHistorico} nesse dia`} />
             )}
-            {!loadingHistorico && historico?.temDados && (
+            {!loadingHistorico && !erroHistorico && historico?.data === dataSelecionada && historico.temDados && (
               <>
                 {/* Card resumo do dia */}
                 <Card style={s.resumoDia}>
