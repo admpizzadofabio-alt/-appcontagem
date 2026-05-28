@@ -2,7 +2,8 @@ import React from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { Text, View, Pressable } from 'react-native'
+import { Text, View, Pressable, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../contexts/AuthContext'
 import { colors } from '../theme/colors'
 import { SplashScreen } from '../components/SplashScreen'
@@ -68,21 +69,36 @@ const AuthStack = createNativeStackNavigator<AuthStackParams>()
 const AppStack = createNativeStackNavigator<AppStackParams>()
 const Tab = createBottomTabNavigator<TabParams>()
 
-function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
-  return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.4 }}>{icon}</Text>
+function TabIcon({ icon, focused, size = 22 }: { icon: string; focused: boolean; size?: number }) {
+  return <Text style={{ fontSize: size, opacity: focused ? 1 : 0.4 }}>{icon}</Text>
+}
+
+// Opções da tab bar responsivas: respeitam a barra do sistema (insets) e
+// escalam em telas largas (tablet), evitando que os rótulos sejam cobertos.
+function useTabScreenOptions() {
+  const insets = useSafeAreaInsets()
+  const { width } = useWindowDimensions()
+  const isTablet = width >= 600
+  const baseHeight = isTablet ? 70 : 62
+  return {
+    headerShown: false,
+    tabBarStyle: {
+      backgroundColor: colors.surface,
+      borderTopColor: colors.border,
+      height: baseHeight + insets.bottom,
+      paddingBottom: Math.max(insets.bottom, 8),
+      paddingTop: 6,
+    },
+    tabBarActiveTintColor: colors.primary,
+    tabBarInactiveTintColor: colors.textSub,
+    tabBarLabelStyle: { fontSize: isTablet ? 13 : 11, fontWeight: '600' as const },
+    tabBarIconStyle: isTablet ? { marginTop: 2 } : undefined,
+  }
 }
 
 function CompradoresTabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 62, paddingBottom: 8 },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSub,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-      }}
-    >
+    <Tab.Navigator screenOptions={useTabScreenOptions()}>
       <Tab.Screen name="EstoqueTab" component={EstoqueScreen} options={{ title: 'Estoque', tabBarIcon: ({ focused }) => <TabIcon icon="📦" focused={focused} /> }} />
     </Tab.Navigator>
   )
@@ -90,20 +106,7 @@ function CompradoresTabNavigator() {
 
 function TabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 62,
-          paddingBottom: 8,
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSub,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-      }}
-    >
+    <Tab.Navigator screenOptions={useTabScreenOptions()}>
       <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Início', tabBarIcon: ({ focused }) => <TabIcon icon="🏠" focused={focused} /> }} />
       <Tab.Screen name="EstoqueTab" component={EstoqueScreen} options={{ title: 'Estoque', tabBarIcon: ({ focused }) => <TabIcon icon="📦" focused={focused} /> }} />
 <Tab.Screen name="RequisicoesTab" component={RequisicoesScreen} options={{ title: 'Requisições', tabBarIcon: ({ focused }) => <TabIcon icon="🔗" focused={focused} /> }} />

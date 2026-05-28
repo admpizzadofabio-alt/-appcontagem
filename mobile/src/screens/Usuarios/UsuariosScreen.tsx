@@ -16,7 +16,7 @@ const NIVEIS = ['Comprador', 'Operador', 'Supervisor', 'Admin']
 export function UsuariosScreen() {
   const { data: usuarios = [], isLoading } = useListarUsuariosQuery()
   const { data: setoresData = [] } = useListarSetoresQuery({ apenasAtivos: true })
-  const SETORES = [...setoresData.map((s) => s.nome), 'Admin', 'Todos']
+  const SETORES = [...setoresData.map((s) => s.nome), 'Todos']
   const [criar, { isLoading: criando }] = useCriarUsuarioMutation()
   const [atualizar, { isLoading: atualizando }] = useAtualizarUsuarioMutation()
   const [toggle] = useToggleUsuarioMutation()
