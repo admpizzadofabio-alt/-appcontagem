@@ -240,8 +240,20 @@ export async function historico(data: string, local: string) {
   // Otimização de memória: usa a contagem fechada mais recente antes da data solicitada
   // como baseline, evitando carregar toda a história desde a CargaInicial (risco de OOM).
   // Fallback para CargaInicial se não houver contagem fechada anterior.
+  //
+  // Exclui contagens FORJADAS pelo cron (turno fechadoSemContagem): elas têm
+  // quantidadeContada=0 e, se usadas como baseline, fazem o walk-forward arrancar do
+  // zero → saldo negativo ao aplicar Colibri. Mesma proteção do CASO 1 (linha ~124).
+  const turnosForjados = await prisma.fechamentoTurno.findMany({
+    where: { local, fechadoSemContagem: true, contagemId: { not: null } },
+    select: { contagemId: true },
+  })
+  const idsForjados = turnosForjados.map((t) => t.contagemId!).filter(Boolean)
   const ultimaContagemFechada = await prisma.contagemEstoque.findFirst({
-    where: { local, status: 'Fechada', dataFechamento: { lte: inicioDia } },
+    where: {
+      local, status: 'Fechada', dataFechamento: { lte: inicioDia },
+      ...(idsForjados.length > 0 && { id: { notIn: idsForjados } }),
+    },
     orderBy: { dataFechamento: 'desc' },
     include: { itens: { select: { produtoId: true, quantidadeContada: true } } },
   })
