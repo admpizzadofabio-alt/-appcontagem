@@ -121,14 +121,10 @@ export function EstoqueScreen() {
     () => data.filter((e) => e.produto.nomeBebida.toLowerCase().includes(buscaDebounced.toLowerCase())),
     [data, buscaDebounced],
   )
-  const baixo = useMemo(
-    () => filtrados.filter((e) => e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo),
-    [filtrados],
-  )
-  const ok = useMemo(
-    () => filtrados.filter((e) => !(e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo)),
-    [filtrados],
-  )
+  // Negativo SEMPRE entra no alerta (mesmo sem mínimo configurado) — é o sinal mais crítico
+  const ehAlerta = (e: EstoqueItem) => e.quantidadeAtual < 0 || (e.produto.estoqueMinimo > 0 && e.quantidadeAtual <= e.produto.estoqueMinimo)
+  const baixo = useMemo(() => filtrados.filter(ehAlerta), [filtrados])
+  const ok = useMemo(() => filtrados.filter((e) => !ehAlerta(e)), [filtrados])
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -294,6 +290,9 @@ export function EstoqueScreen() {
                       <View style={s.itemInfo}>
                         <Text style={s.itemName}>{e.produto.nomeBebida}</Text>
                         <Text style={s.itemSub}>{e.produto.categoria} · {e.local} · Mín: {e.produto.estoqueMinimo} {e.produto.unidadeMedida}</Text>
+                        {e.quantidadeAtual < 0 && (
+                          <Text style={s.faltaEntradaBadge}>⚠️ Vendeu sem estoque · falta dar entrada</Text>
+                        )}
                       </View>
                       <View style={s.itemRight}>
                         <AnimatedNumber value={e.quantidadeAtual} style={[s.itemQty, { color: colors.danger }]} />

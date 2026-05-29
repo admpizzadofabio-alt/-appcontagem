@@ -58,7 +58,7 @@ export async function exportEstoqueAtual(): Promise<string> {
       i.quantidadeAtual,
       i.produto.unidadeMedida,
       i.produto.custoUnitario,
-      Math.round(i.quantidadeAtual * i.produto.custoUnitario * 100) / 100,
+      Math.round(Math.max(0, i.quantidadeAtual) * i.produto.custoUnitario * 100) / 100,
       i.produto.estoqueMinimo,
       i.atualizadoEm.toISOString(),
     ])

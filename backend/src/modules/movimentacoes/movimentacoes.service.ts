@@ -157,20 +157,14 @@ export async function criar(data: CriarData) {
 
 async function _atualizarEstoque(tx: any, data: CriarData) {
   if (data.tipoMov === 'CargaInicial') {
-    // Carga Inicial = marco zero do produto: substitui estoque no local especificado,
-    // ZERA estoque em outros locais (marco é por produto, não por local) e arquiva
-    // Saídas Colibri anteriores. Movimentações antigas ficam no banco (auditoria),
-    // mas não impactam mais o estoque atual.
+    // Carga Inicial = marco zero do produto NO SETOR onde foi feita: substitui o estoque
+    // apenas neste local e arquiva Saídas Colibri anteriores. Outros setores NÃO são
+    // afetados (a carga é por setor). Movimentações antigas ficam no banco (auditoria),
+    // mas não impactam mais o estoque atual deste local.
     const local = data.localDestino ?? data.localOrigem ?? 'Bar'
     const agora = new Date()
     const existing = await tx.estoqueAtual.findUnique({ where: { produtoId_local: { produtoId: data.produtoId, local } } })
     const estoqueAnterior = existing?.quantidadeAtual ?? 0
-
-    // Estoque em outros locais antes da limpeza (snapshot p/ auditoria)
-    const outrosLocais = await tx.estoqueAtual.findMany({
-      where: { produtoId: data.produtoId, local: { not: local }, quantidadeAtual: { gt: 0 } },
-      select: { local: true, quantidadeAtual: true },
-    })
 
     await tx.estoqueAtual.upsert({
       where: { produtoId_local: { produtoId: data.produtoId, local } },
@@ -195,7 +189,7 @@ async function _atualizarEstoque(tx: any, data: CriarData) {
       select: { id: true, quantidade: true, dataMov: true, referenciaOrigem: true },
     })
 
-    if (saidasArquivar.length > 0 || outrosLocais.length > 0) {
+    if (saidasArquivar.length > 0) {
       await tx.logAuditoria.create({
         data: {
           usuarioId: data.usuarioId,
@@ -207,7 +201,6 @@ async function _atualizarEstoque(tx: any, data: CriarData) {
           detalhes: JSON.stringify({
             localCarga: local,
             estoqueAnterior, estoqueNovo: data.quantidade,
-            outrosLocaisZerados: outrosLocais,
             saidasColibriRemovidas: saidasArquivar.length,
             quantidadeTotalSaidasRemovidas: saidasArquivar.reduce((a: number, s: any) => a + s.quantidade, 0),
             saidasIds: saidasArquivar.map((s: any) => s.id),

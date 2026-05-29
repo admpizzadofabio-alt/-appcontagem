@@ -60,8 +60,9 @@ export async function getCmvBebidas(dataInicio: Date, dataFim: Date) {
   for (const e of estoqueAtual) {
     const cat = e.produto.categoria
     const acc = get(cat)
-    acc.efQtd   += e.quantidadeAtual
-    acc.efValor += e.quantidadeAtual * e.produto.custoUnitario
+    // Estoque final piso em 0 p/ CMV: saldo negativo é dívida operacional, não EF negativo
+    acc.efQtd   += Math.max(0, e.quantidadeAtual)
+    acc.efValor += Math.max(0, e.quantidadeAtual) * e.produto.custoUnitario
   }
 
   const porCategoria = Object.values(byCategoria).map((c) => {

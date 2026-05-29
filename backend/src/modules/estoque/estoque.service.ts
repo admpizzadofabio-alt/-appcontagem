@@ -63,9 +63,12 @@ export async function listar(local?: string) {
 export async function summary() {
   type Item = Awaited<ReturnType<typeof prisma.estoqueAtual.findMany<{ include: { produto: true } }>>>[number]
   const itens: Item[] = await prisma.estoqueAtual.findMany({ where: { produto: { ativo: true, marcoInicialEm: { not: null } } }, include: { produto: true } })
-  const totalValor = itens.reduce((acc: number, i: Item) => acc + i.quantidadeAtual * i.produto.custoUnitario, 0)
+  // Valor financeiro piso em 0: saldo negativo é dívida operacional, não vira valor negativo
+  // (distorceria CMV/margem). O saldo real continua negativo p/ alerta operacional.
+  const totalValor = itens.reduce((acc: number, i: Item) => acc + Math.max(0, i.quantidadeAtual) * i.produto.custoUnitario, 0)
   const totalItens = itens.length
-  const alertas = itens.filter((i: Item) => i.quantidadeAtual <= i.produto.estoqueMinimo && i.produto.estoqueMinimo > 0)
+  // Alerta inclui negativos SEMPRE (mesmo sem mínimo configurado) — negativo é o sinal mais crítico
+  const alertas = itens.filter((i: Item) => i.quantidadeAtual < 0 || (i.quantidadeAtual <= i.produto.estoqueMinimo && i.produto.estoqueMinimo > 0))
   return { totalValor, totalItens, alertas: alertas.length, itensAlerta: alertas.map((a: Item) => ({ ...a.produto, quantidadeAtual: a.quantidadeAtual, local: a.local })) }
 }
 

@@ -16,7 +16,8 @@ export async function macro(dataInicio?: string, dataFim?: string) {
     prisma.aprovacaoMovimentacao.count({ where: { status: 'Pendente' } }),
   ])
 
-  const valorAtivo = estoque.reduce((acc, e) => acc + e.quantidadeAtual * e.produto.custoUnitario, 0)
+  // Valor do ativo piso em 0: saldo negativo (dívida) não conta como valor negativo
+  const valorAtivo = estoque.reduce((acc, e) => acc + Math.max(0, e.quantidadeAtual) * e.produto.custoUnitario, 0)
   const totalEntradas = movimentacoes.filter((m) => m.tipoMov === 'Entrada').reduce((acc, m) => acc + m.quantidade * m.produto.custoUnitario, 0)
   const totalSaidas = movimentacoes.filter((m) => m.tipoMov === 'Saida').reduce((acc, m) => acc + m.quantidade * m.produto.custoUnitario, 0)
   const totalPerdas = movimentacoes.filter((m) => m.tipoMov === 'AjustePerda').reduce((acc, m) => acc + m.quantidade * m.produto.custoUnitario, 0)
