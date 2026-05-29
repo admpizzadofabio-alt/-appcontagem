@@ -216,6 +216,42 @@ async function checarSaudeColibri() {
   }
 }
 
+// Monitor de saldo negativo persistente: saldo < 0 parado há +24h = entrada esquecida.
+// Alerta o Admin ativamente via webhook (além do vermelho na tela). Throttle 12h.
+let ultimoAlertaNegativo = 0
+const ALERTA_NEGATIVO_THROTTLE_MS = 12 * 60 * 60 * 1000
+async function checarSaldoNegativoPersistente() {
+  if (!env.ALERTA_WEBHOOK_URL) return
+  const hora = new Date().getHours()
+  if (hora < 8 || hora > 22) return // horário comercial — não acordar de madrugada
+  if (Date.now() - ultimoAlertaNegativo < ALERTA_NEGATIVO_THROTTLE_MS) return
+
+  // atualizadoEm < 24h atrás = saldo ficou negativo e ninguém corrigiu (entrada/contagem) desde então.
+  // Qualquer movimento (incl. entrada parcial) reseta o relógio — só alerta o que está "esquecido".
+  const limite = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const negativos = await prisma.estoqueAtual.findMany({
+    where: {
+      quantidadeAtual: { lt: 0 },
+      atualizadoEm: { lt: limite },
+      produto: { ativo: true, marcoInicialEm: { not: null } },
+    },
+    include: { produto: { select: { nomeBebida: true, unidadeMedida: true } } },
+    orderBy: { quantidadeAtual: 'asc' },
+  })
+  if (negativos.length === 0) return
+
+  const linhas = negativos.slice(0, 15)
+    .map((n) => `• ${n.produto.nomeBebida} (${n.local}): ${n.quantidadeAtual} ${n.produto.unidadeMedida}`)
+    .join('\n')
+  const extra = negativos.length > 15 ? `\n… e mais ${negativos.length - 15}` : ''
+  await enviarAlerta(
+    `🔴 APPCONTAGEM — ${negativos.length} produto(s) com saldo NEGATIVO há +24h ` +
+    `(provável entrada esquecida ou venda sem estoque):\n${linhas}${extra}`,
+  )
+  ultimoAlertaNegativo = Date.now()
+  logger.warn({ total: negativos.length }, 'Alerta saldo negativo persistente enviado')
+}
+
 async function fecharTurnosOrfaos() {
   // Ao iniciar o servidor, fecha turnos abertos há mais de 24h (caso servidor tenha ficado offline)
   const limite = new Date()
@@ -287,4 +323,8 @@ export function iniciarJobs() {
   // Retenção de fotos: roda diariamente às 03h
   void checarRetencaoFotos()
   setInterval(checarRetencaoFotos, 30 * 60 * 1000)
+
+  // Monitor saldo negativo persistente: alerta Admin se produto fica negativo >24h
+  void checarSaldoNegativoPersistente()
+  setInterval(checarSaldoNegativoPersistente, 30 * 60 * 1000)
 }
