@@ -377,7 +377,7 @@ export function MovimentacaoScreen() {
             {verificacao?.tipo === 'bloqueado' ? (
               <>
                 <Text style={s.modalIcon}>🛑</Text>
-                <Text style={s.modalTitle}>Entrada Bloqueada</Text>
+                <Text style={s.modalTitle}>Entrada Idêntica Detectada</Text>
                 <Text style={s.modalSub}>
                   Já foi registrada uma entrada IDÊNTICA nas últimas 12h:
                 </Text>
@@ -393,11 +393,25 @@ export function MovimentacaoScreen() {
                   </Text>
                 </View>
                 <Text style={s.modalHint}>
-                  Se a contagem mostrou divergência, registre como rascunho na contagem inicial do turno.
+                  Provavelmente é duplicidade. Se for mesmo uma 2ª compra real (outra nota fiscal), justifique — o Admin compara com as notas e aprova.
                 </Text>
-                <Pressable style={s.btnEntendi} onPress={() => setVerificacao(null)}>
-                  <Text style={s.btnEntendiTxt}>Entendi</Text>
-                </Pressable>
+                <TextInput
+                  style={s.modalInput}
+                  placeholder="Ex: 2ª entrega do dia, nota fiscal diferente..."
+                  placeholderTextColor="#aaa"
+                  value={justificativa}
+                  onChangeText={setJustificativa}
+                  multiline
+                  numberOfLines={2}
+                />
+                <View style={s.modalRow}>
+                  <Pressable style={s.btnCancel} onPress={() => { setVerificacao(null); setJustificativa('') }}>
+                    <Text style={s.btnCancelTxt}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable style={s.btnConfirmar} onPress={confirmarComJustificativa}>
+                    <Text style={s.btnConfirmarTxt}>Enviar p/ aprovação</Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <>
