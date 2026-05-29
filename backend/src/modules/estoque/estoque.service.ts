@@ -1,6 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { NotFoundError, ForbiddenError } from '../../shared/errors.js'
-import { parseLocalDate } from '../../shared/dateLocal.js'
+import { parseLocalDate, formatLocalDate } from '../../shared/dateLocal.js'
 
 export async function listar(local?: string) {
   // Filtro Marco Inicial: só exibe produtos que já tiveram carga inicial.
@@ -356,6 +356,24 @@ export async function historico(data: string, local: string) {
 
   if (produtos.length === 0) {
     return { temDados: false, data, local, resumo: null, produtos: [] }
+  }
+
+  // Para o dia de hoje, ancora fechamento/abertura no EstoqueAtual (fonte da verdade real).
+  // O walk-forward pode dar resultado errado se o baseline (ultimaContagemFechada) veio de
+  // uma contagem forjada com zeros pelo cron antigo — o EstoqueAtual sempre reflete o saldo correto.
+  if (data === formatLocalDate()) {
+    const estoqueAtuals = await prisma.estoqueAtual.findMany({
+      where: { produtoId: { in: produtos.map((p) => p.produtoId) }, local },
+      select: { produtoId: true, quantidadeAtual: true },
+    })
+    const estoqueMap = new Map(estoqueAtuals.map((e) => [e.produtoId, e.quantidadeAtual]))
+    for (const p of produtos) {
+      const atual = estoqueMap.get(p.produtoId)
+      if (atual !== undefined) {
+        p.fechamento = atual
+        p.abertura = atual + p.colibri + p.perdas - p.entradas
+      }
+    }
   }
 
   return {
