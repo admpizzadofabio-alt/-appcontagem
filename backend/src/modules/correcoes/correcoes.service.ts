@@ -63,16 +63,14 @@ export async function registrarCorrecao(data: {
       },
     })
 
-    const estoqueServido = await tx.estoqueAtual.findUnique({
+    // Opção A: o produto servido saiu de verdade — debita mesmo que zere ou fique negativo.
+    // Saldo negativo sinaliza "venda sem estoque / falta dar entrada" (BUSINESS_RULES #1),
+    // coerente com o resto do sistema. Antes travava aqui e impedia registrar a correção
+    // quando o servido também estava sem saldo.
+    await tx.estoqueAtual.upsert({
       where: { produtoId_local: { produtoId: data.produtoServidoId, local: data.local } },
-    })
-    const qtdAtual = estoqueServido?.quantidadeAtual ?? 0
-    if (qtdAtual < data.quantidade) {
-      throw new AppError(`Estoque insuficiente de ${prodS.nomeBebida} no ${data.local}. Disponível: ${qtdAtual}`, 400)
-    }
-    await tx.estoqueAtual.update({
-      where: { produtoId_local: { produtoId: data.produtoServidoId, local: data.local } },
-      data: { quantidadeAtual: { decrement: data.quantidade }, atualizadoPor: data.operadorId },
+      create: { produtoId: data.produtoServidoId, local: data.local, quantidadeAtual: -data.quantidade, atualizadoPor: data.operadorId },
+      update: { quantidadeAtual: { decrement: data.quantidade }, atualizadoPor: data.operadorId },
     })
 
     await tx.logAuditoria.create({
