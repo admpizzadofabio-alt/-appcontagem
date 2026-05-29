@@ -399,11 +399,12 @@ export async function historico(data: string, local: string) {
 
 // Função interna — usada por movimentações (atomic, sem TOCTOU)
 export async function upsertEstoque(produtoId: string, local: string, delta: number, usuarioId: string) {
+  // Saldo PODE ficar negativo: sinaliza "venda sem estoque / falta dar entrada" (BUSINESS_RULES #1).
   await prisma.$executeRaw`
     INSERT INTO "EstoqueAtual" ("id", "produtoId", "local", "quantidadeAtual", "atualizadoPor", "atualizadoEm")
-    VALUES (gen_random_uuid(), ${produtoId}, ${local}, GREATEST(0, ${delta}::numeric), ${usuarioId}, NOW())
+    VALUES (gen_random_uuid(), ${produtoId}, ${local}, ${delta}::numeric, ${usuarioId}, NOW())
     ON CONFLICT ("produtoId", "local") DO UPDATE
-    SET "quantidadeAtual" = GREATEST(0, "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric),
+    SET "quantidadeAtual" = "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric,
         "atualizadoPor"   = ${usuarioId},
         "atualizadoEm"    = NOW()
   `

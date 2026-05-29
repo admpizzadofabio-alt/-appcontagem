@@ -332,20 +332,24 @@ export function EstoqueScreen() {
             {ok.map((e) => {
               const aberto = expandidos.has(e.id)
               const hist = historico?.produtos.find((p) => p.produtoId === e.produtoId)
+              const negativo = e.quantidadeAtual < 0
               return (
                 <Card key={e.id} style={s.itemCard}>
                   <TouchableOpacity onPress={() => toggleExpand(e.id)} activeOpacity={0.8}>
                     <View style={s.itemRow}>
-                      <View style={[s.dot, { backgroundColor: hist?.precisaRevisao ? colors.warning : colors.accent }]} />
+                      <View style={[s.dot, { backgroundColor: negativo ? colors.danger : hist?.precisaRevisao ? colors.warning : colors.accent }]} />
                       <View style={s.itemInfo}>
                         <Text style={s.itemName}>{e.produto.nomeBebida}</Text>
                         <Text style={s.itemSub}>{e.produto.categoria} · {e.local}</Text>
+                        {negativo && !qtdBloqueada && (
+                          <Text style={s.faltaEntradaBadge}>⚠️ Vendeu sem estoque · falta dar entrada</Text>
+                        )}
                         {hist?.precisaRevisao && (
                           <Text style={s.pendenteBadge}>⏳ Pendente validação Admin · saldo não atualizado</Text>
                         )}
                       </View>
                       <View style={s.itemRight}>
-                        {qtdBloqueada ? <Text style={s.itemQty}>🔒</Text> : <AnimatedNumber value={e.quantidadeAtual} style={s.itemQty} />}
+                        {qtdBloqueada ? <Text style={s.itemQty}>🔒</Text> : <AnimatedNumber value={e.quantidadeAtual} style={[s.itemQty, negativo && { color: colors.danger }]} />}
                         {!qtdBloqueada && <Text style={s.itemUnit}>{e.produto.unidadeMedida}</Text>}
                       </View>
                       <Text style={s.chevron}>{aberto ? '▲' : '▼'}</Text>
@@ -403,6 +407,7 @@ const s = StyleSheet.create({
   itemUnit: { fontSize: 11, color: colors.textSub },
   chevron: { fontSize: 10, color: colors.textMuted, marginLeft: 2 },
   pendenteBadge: { fontSize: 10, color: colors.warning, fontWeight: '700', marginTop: 4 },
+  faltaEntradaBadge: { fontSize: 10, color: colors.danger, fontWeight: '700', marginTop: 4 },
   expandido: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
   expandidoItem: { fontSize: 12, color: colors.textSub },
   itemCardDiv: { borderLeftWidth: 3, borderLeftColor: colors.danger },

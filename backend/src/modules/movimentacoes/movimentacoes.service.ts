@@ -275,11 +275,13 @@ export async function deletarMovimentacao(id: string, usuarioId: string, usuario
 
 async function _upsertEstoque(tx: any, produtoId: string, local: string, delta: number, usuarioId: string) {
   // True atomic upsert — INSERT ON CONFLICT elimina race condition entre UPDATE+INSERT
+  // Saldo PODE ficar negativo: representa "venda sem estoque / falta dar entrada" (BUSINESS_RULES #1).
+  // A entrada posterior reconcilia sozinha (ex: -2 + 24 = 22).
   await tx.$executeRaw`
     INSERT INTO "EstoqueAtual" ("id", "produtoId", "local", "quantidadeAtual", "atualizadoPor", "atualizadoEm")
-    VALUES (gen_random_uuid(), ${produtoId}, ${local}, GREATEST(0, ${delta}::numeric), ${usuarioId}, NOW())
+    VALUES (gen_random_uuid(), ${produtoId}, ${local}, ${delta}::numeric, ${usuarioId}, NOW())
     ON CONFLICT ("produtoId", "local") DO UPDATE
-    SET "quantidadeAtual" = GREATEST(0, "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric),
+    SET "quantidadeAtual" = "EstoqueAtual"."quantidadeAtual" + ${delta}::numeric,
         "atualizadoPor"   = ${usuarioId},
         "atualizadoEm"    = NOW()
   `

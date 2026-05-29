@@ -303,10 +303,12 @@ export async function importarVendas(params: {
           const estoqueAtual = await tx.estoqueAtual.findUnique({
             where: { produtoId_local: { produtoId, local: info.local } },
           })
-          const novaQtd = Math.max(0, (estoqueAtual?.quantidadeAtual ?? 0) - qtdDecrement)
+          // Saldo PODE ficar negativo: venda sem estoque sinaliza "falta dar entrada" (BUSINESS_RULES #1).
+          // A entrada posterior reconcilia sozinha. Antes era travado em 0 e a dívida sumia.
+          const novaQtd = (estoqueAtual?.quantidadeAtual ?? 0) - qtdDecrement
           await tx.estoqueAtual.upsert({
             where: { produtoId_local: { produtoId, local: info.local } },
-            create: { produtoId, local: info.local, quantidadeAtual: 0, atualizadoPor: params.usuarioId },
+            create: { produtoId, local: info.local, quantidadeAtual: novaQtd, atualizadoPor: params.usuarioId },
             update: { quantidadeAtual: novaQtd, atualizadoPor: params.usuarioId },
           })
 
