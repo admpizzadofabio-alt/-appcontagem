@@ -379,7 +379,7 @@ export function MovimentacaoScreen() {
                 <Text style={s.modalIcon}>🛑</Text>
                 <Text style={s.modalTitle}>Entrada Bloqueada</Text>
                 <Text style={s.modalSub}>
-                  Já foi registrada uma entrada IDÊNTICA nas últimas 24h:
+                  Já foi registrada uma entrada IDÊNTICA nas últimas 12h:
                 </Text>
                 <View style={s.modalBox}>
                   <Text style={s.modalBoxTxt}>

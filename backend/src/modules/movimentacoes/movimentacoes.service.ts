@@ -87,6 +87,18 @@ export async function criar(data: CriarData) {
     if (data.localOrigem === data.localDestino) {
       throw new BusinessRuleError('Origem e destino da transferência devem ser diferentes.')
     }
+    // Transferência NÃO pode gerar saldo negativo: só dá pra enviar o que existe
+    // fisicamente na origem (diferente de venda, que pode estourar e sinalizar dívida).
+    const estoqueOrigem = await prisma.estoqueAtual.findUnique({
+      where: { produtoId_local: { produtoId: data.produtoId, local: data.localOrigem! } },
+    })
+    const disponivel = estoqueOrigem?.quantidadeAtual ?? 0
+    if (data.quantidade > disponivel) {
+      throw new BusinessRuleError(
+        `Estoque insuficiente em ${data.localOrigem}: disponível ${disponivel} ${produto.unidadeMedida}, ` +
+        `tentou transferir ${data.quantidade}.`
+      )
+    }
   } else {
     // Entrada/Saida/Perda/CargaInicial: local deve ser o setor do operador
     _validarLocalAcesso(data.setor, data.nivelAcesso, data.localOrigem ?? data.localDestino)
@@ -342,6 +354,18 @@ export async function confirmarTransferencia(movId: string, confirmadorId: strin
     if (!mov) throw new NotFoundError('Transferência não encontrada')
     if (!['Admin', 'Supervisor'].includes(nivelAcesso) && mov.localDestino !== setor)
       throw new ForbiddenError(`Apenas o setor destinatário ("${mov.localDestino}") pode confirmar esta transferência`)
+
+    // Revalida estoque na confirmação: vendas/perdas entre o pedido e a aprovação
+    // podem ter reduzido a origem. Transferência nunca pode deixar a origem negativa.
+    const estoqueOrigem = await tx.estoqueAtual.findUnique({
+      where: { produtoId_local: { produtoId: mov.produtoId, local: mov.localOrigem! } },
+    })
+    if ((estoqueOrigem?.quantidadeAtual ?? 0) < mov.quantidade) {
+      throw new BusinessRuleError(
+        `Estoque insuficiente em ${mov.localOrigem} para confirmar: disponível ` +
+        `${estoqueOrigem?.quantidadeAtual ?? 0}, transferência de ${mov.quantidade}.`
+      )
+    }
 
     // Canonical lock order prevents deadlock when two transfers cross opposite directions
     const [firstLocal, secondLocal] = [mov.localOrigem!, mov.localDestino!].sort()
